@@ -1,0 +1,55 @@
+{
+  "expo": {
+    "name": "Neofit",
+    "slug": "neofit",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "scheme": "com.neofit.app",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0F1115"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.neofit.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0F1115"
+      },
+      "package": "com.neofit.app",
+      "permissions": [
+        "android.permission.RECEIVE_BOOT_COMPLETED",
+        "android.permission.VIBRATE",
+        "android.permission.POST_NOTIFICATIONS"
+      ]
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#8BAE9E"
+        }
+      ],
+      "expo-web-browser",
+      "expo-font"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "4823931f-e511-464e-bc84-0e42a8dddb40"
+      }
+    },
+    "owner": "abhiyaan_mahato"
+  }
+}
