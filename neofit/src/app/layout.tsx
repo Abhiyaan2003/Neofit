@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import './globals.css'
 import { Toaster } from '@/components/ui/sonner'
-import { AuthProvider } from '@/features/auth/AuthProvider'
+import { AuthProvider } from '@/components/auth-provider'
 
 export const metadata: Metadata = {
   title: {
