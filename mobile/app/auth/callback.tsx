@@ -7,8 +7,10 @@ import {
   Alert,
 } from 'react-native'
 
-import { useRouter } from 'expo-router'
-import * as Linking from 'expo-linking'
+import {
+  useRouter,
+  useLocalSearchParams,
+} from 'expo-router'
 
 import { supabase } from '@/lib/supabase'
 
@@ -21,11 +23,17 @@ import {
 export default function AuthCallback() {
   const router = useRouter()
 
+  const params = useLocalSearchParams()
+
   useEffect(() => {
     let mounted = true
 
     const navigateHome = () => {
       if (!mounted) return
+
+      console.log(
+        '[AuthCallback] Navigate home'
+      )
 
       router.replace('/')
     }
@@ -33,13 +41,18 @@ export default function AuthCallback() {
     const navigateLogin = () => {
       if (!mounted) return
 
+      console.log(
+        '[AuthCallback] Navigate login'
+      )
+
       router.replace('/(auth)/login')
     }
 
     const handleAuth = async () => {
       try {
         console.log(
-          '[AuthCallback] Checking existing session'
+          '[AuthCallback] Params:',
+          params
         )
 
         // Existing session check
@@ -49,7 +62,7 @@ export default function AuthCallback() {
 
         if (session) {
           console.log(
-            '[AuthCallback] Session already exists'
+            '[AuthCallback] Existing session found'
           )
 
           navigateHome()
@@ -57,49 +70,129 @@ export default function AuthCallback() {
           return
         }
 
-        // Get deep link URL
-        const url =
-          await Linking.getInitialURL()
+        /**
+         * OAuth Error Handling
+         */
+        const error =
+          typeof params.error === 'string'
+            ? params.error
+            : undefined
 
-        console.log(
-          '[AuthCallback] Initial URL:',
-          url
-        )
+        const errorDescription =
+          typeof params.error_description ===
+            'string'
+            ? params.error_description
+            : undefined
 
-        if (!url) {
+        if (error || errorDescription) {
           throw new Error(
-            'No callback URL found'
+            errorDescription ||
+            error ||
+            'OAuth failed'
           )
         }
 
         /**
-         * IMPORTANT:
-         * Supabase handles the session automatically
-         * from the deep link.
-         *
-         * We just wait briefly and re-check session.
+         * Handle PKCE code flow
          */
+        const code =
+          typeof params.code === 'string'
+            ? params.code
+            : undefined
+
+        if (code) {
+          console.log(
+            '[AuthCallback] PKCE code found'
+          )
+
+          const { error } =
+            await supabase.auth.exchangeCodeForSession(
+              code
+            )
+
+          if (error) {
+            console.error(
+              '[AuthCallback] Exchange error:',
+              error
+            )
+
+            throw error
+          }
+
+          navigateHome()
+
+          return
+        }
+
+        /**
+         * Handle implicit flow tokens
+         */
+        const accessToken =
+          typeof params.access_token ===
+            'string'
+            ? params.access_token
+            : undefined
+
+        const refreshToken =
+          typeof params.refresh_token ===
+            'string'
+            ? params.refresh_token
+            : undefined
+
+        if (accessToken && refreshToken) {
+          console.log(
+            '[AuthCallback] Tokens found'
+          )
+
+          const { error } =
+            await supabase.auth.setSession({
+              access_token: accessToken,
+              refresh_token: refreshToken,
+            })
+
+          if (error) {
+            console.error(
+              '[AuthCallback] setSession error:',
+              error
+            )
+
+            throw error
+          }
+
+          navigateHome()
+
+          return
+        }
+
+        /**
+         * Final fallback:
+         * wait for Supabase hydration
+         */
+        console.log(
+          '[AuthCallback] Waiting for session hydration...'
+        )
 
         await new Promise(resolve =>
-          setTimeout(resolve, 1500)
+          setTimeout(resolve, 2000)
         )
 
         const {
-          data: { session: newSession },
+          data: { session: hydratedSession },
         } = await supabase.auth.getSession()
 
-        console.log(
-          '[AuthCallback] Session after callback:',
-          !!newSession
-        )
-
-        if (newSession) {
-          navigateHome()
-        } else {
-          throw new Error(
-            'Authentication session not established'
+        if (hydratedSession) {
+          console.log(
+            '[AuthCallback] Hydrated session found'
           )
+
+          navigateHome()
+
+          return
         }
+
+        throw new Error(
+          'No authentication data found'
+        )
       } catch (err: any) {
         console.error(
           '[AuthCallback] Auth failed:',
@@ -109,7 +202,7 @@ export default function AuthCallback() {
         Alert.alert(
           'Login Failed',
           err?.message ||
-            'Authentication failed'
+          'Authentication failed'
         )
 
         navigateLogin()
