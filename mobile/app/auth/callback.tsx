@@ -15,6 +15,7 @@ import {
 import * as Linking from 'expo-linking'
 
 import { supabase } from '@/lib/supabase'
+
 import {
   Colors,
   FontSize,
@@ -25,9 +26,9 @@ export default function AuthCallback() {
   const router = useRouter()
 
   const params = useLocalSearchParams<{
-    code?: string
-    error?: string
-    error_description?: string
+    code?: string | string[]
+    error?: string | string[]
+    error_description?: string | string[]
   }>()
 
   const processedCode =
@@ -35,14 +36,29 @@ export default function AuthCallback() {
 
   useEffect(() => {
     let mounted = true
+    let completed = false
 
     const navigateHome = () => {
       if (!mounted) return
+
+      completed = true
+
+      console.log(
+        '[AuthCallback] Navigating home'
+      )
+
       router.replace('/')
     }
 
     const navigateLogin = () => {
       if (!mounted) return
+
+      completed = true
+
+      console.log(
+        '[AuthCallback] Navigating login'
+      )
+
       router.replace('/(auth)/login')
     }
 
@@ -50,6 +66,7 @@ export default function AuthCallback() {
       code: string
     ) => {
       try {
+        // Prevent duplicate processing
         if (
           processedCode.current === code
         ) {
@@ -72,21 +89,41 @@ export default function AuthCallback() {
             code
           )
 
+        // IMPORTANT:
+        // Sometimes Android already restores
+        // the session automatically before this
+        // exchange completes.
         if (error) {
           console.error(
             '[AuthCallback] Exchange error:',
             error
           )
 
+          // Check if session already exists
+          const {
+            data: { session },
+          } = await supabase.auth.getSession()
+
+          if (session) {
+            console.log(
+              '[AuthCallback] Session already established'
+            )
+
+            navigateHome()
+
+            return
+          }
+
           throw error
         }
 
+        // Verify session exists
         const {
           data: { session },
         } = await supabase.auth.getSession()
 
         console.log(
-          '[AuthCallback] Session:',
+          '[AuthCallback] Session exists:',
           !!session
         )
 
@@ -115,6 +152,10 @@ export default function AuthCallback() {
 
     const processAuth = async () => {
       try {
+        console.log(
+          '[AuthCallback] Starting auth processing'
+        )
+
         // Existing session check
         const {
           data: { session },
@@ -130,15 +171,27 @@ export default function AuthCallback() {
           return
         }
 
-        // OAuth errors
+        // OAuth error handling
+        const oauthError =
+          Array.isArray(params.error)
+            ? params.error[0]
+            : params.error
+
+        const oauthErrorDescription =
+          Array.isArray(
+            params.error_description
+          )
+            ? params.error_description[0]
+            : params.error_description
+
         if (
-          params.error ||
-          params.error_description
+          oauthError ||
+          oauthErrorDescription
         ) {
           throw new Error(
             String(
-              params.error_description ||
-              params.error ||
+              oauthErrorDescription ||
+              oauthError ||
               'OAuth authentication failed'
             )
           )
@@ -146,18 +199,18 @@ export default function AuthCallback() {
 
         let code: string | null = null
 
-        // Try params first
-        if (
-          typeof params.code === 'string'
-        ) {
-          code = params.code
+        // 1. Try Expo Router params
+        if (params.code) {
+          code = Array.isArray(params.code)
+            ? params.code[0]
+            : params.code
 
           console.log(
             '[AuthCallback] Code from params'
           )
         }
 
-        // Fallback: initial URL
+        // 2. Fallback: initial deep link
         if (!code) {
           const initialUrl =
             await Linking.getInitialURL()
@@ -177,10 +230,15 @@ export default function AuthCallback() {
             ) {
               code =
                 parsed.queryParams.code
+
+              console.log(
+                '[AuthCallback] Code from initial URL'
+              )
             }
           }
         }
 
+        // No auth code found
         if (!code) {
           throw new Error(
             'No authentication code found'
@@ -206,7 +264,10 @@ export default function AuthCallback() {
 
     processAuth()
 
+    // Safety timeout
     const timeout = setTimeout(() => {
+      if (completed) return
+
       console.warn(
         '[AuthCallback] Timeout reached'
       )
@@ -216,6 +277,7 @@ export default function AuthCallback() {
 
     return () => {
       mounted = false
+
       clearTimeout(timeout)
     }
   }, [])
