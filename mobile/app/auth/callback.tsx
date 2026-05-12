@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import {
   View,
   ActivityIndicator,
@@ -24,6 +24,7 @@ export default function AuthCallback() {
   const incomingUrl = Linking.useURL()
   const { setSession } = useAuthStore()
   const [currentUrl, setCurrentUrl] = useState<string | null>(null)
+
   
   // 1. Enterprise State Orchestration
   const processingKey = useRef<string | null>(null)
@@ -31,22 +32,108 @@ export default function AuthCallback() {
   const authInProgress = useRef(false)
   const navigationTriggered = useRef(false)
   const isCancelled = useRef(false)
+  const timeoutRef =
+  useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // 1.5. Initial State Reset (Fast Refresh / Hot Reload safety)
+  useEffect(() => {
+    authResolved.current = false
+    navigationTriggered.current = false
+    isCancelled.current = false
+  }, [])
 
   // 2. Async Infrastructure
-  const shouldAbort = () => isCancelled.current || authResolved.current
+  const shouldAbort = useCallback(() => isCancelled.current, [])
 
-  const sleep = async (ms: number): Promise<boolean> => {
-    return new Promise(resolve => {
-      const timeout = setTimeout(() => {
-        clearTimeout(timeout)
+  const sleep = useCallback(
+    async (ms: number): Promise<boolean> => {
+      const interval = 50
+      let elapsed = 0
+
+      while (elapsed < ms) {
         if (shouldAbort()) {
-          resolve(false)
-          return
+          console.log('[AuthCallback] sleep() aborted early')
+          return false
         }
-        resolve(true)
-      }, ms)
-    })
-  }
+
+        await new Promise(resolve =>
+          setTimeout(resolve, Math.min(interval, ms - elapsed))
+        )
+
+        elapsed += interval
+      }
+
+      return !shouldAbort()
+    },
+    [shouldAbort]
+  )
+
+  const abortToLogin = useCallback((reason: string) => {
+    if (shouldAbort()) return
+    
+    console.error('[AuthCallback] ABORT:', reason)
+    if (!isCancelled.current) {
+      Alert.alert('Login Failed', reason)
+    }
+
+    isCancelled.current = true
+    authResolved.current = true
+    navigationTriggered.current = true
+    
+    router.replace('/(auth)/login')
+  }, [router, shouldAbort])
+
+  const finalizeAuth = useCallback(async () => {
+    // 0. Double-execution guard
+    if (authResolved.current || navigationTriggered.current) {
+      console.log('[AuthCallback] finalizeAuth already resolved or triggered, skipping...')
+      return
+    }
+    
+    console.log('[AuthCallback] Finalizing auth resolution...')
+    
+    try {
+      // 1. Immediate Session Verification (PRE-LOCK)
+      const { data: { session } } = await supabase.auth.getSession()
+      
+      if (!session) {
+        console.warn('[AuthCallback] No session found during finalization')
+        throw new Error('Session missing during finalization')
+      }
+
+      // 2. Lock AFTER session confirmation
+      authResolved.current = true
+      navigationTriggered.current = true
+
+      console.log('[AuthCallback] Session verified. Syncing store and navigating...')
+      
+      // 3. Background Store Sync
+      console.log('[AuthCallback] Syncing store state...')
+      setSession(session)
+
+      // 3.5. Zustand Propagation Delay (Stabilization)
+      const ok = await sleep(300)
+      if (!ok) {
+        console.log('[AuthCallback] Navigation aborted during store sync delay')
+        return
+      }
+
+      // 4. Final Navigation Execution (STABILIZED)
+      console.log('[AuthCallback] SUCCESS: Authentication resolved. Entering app.')
+      router.replace('/')
+
+      // 4.5 Clear timeout after successful navigation
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current)
+        timeoutRef.current = null
+      }
+
+      console.log('[AuthCallback] Auth flow COMPLETE')
+    } catch (err: any) {
+      console.error('[AuthCallback] Finalization error:', err.message)
+      abortToLogin(err.message || 'Session verification failed')
+    }
+  }, [router, setSession, sleep, abortToLogin])
 
   // 3. Sync URL with functional state to prevent stale closures
   useEffect(() => {
@@ -72,89 +159,37 @@ export default function AuthCallback() {
     return () => {
       subscription.remove()
       isCancelled.current = true
-      authResolved.current = true // Stop all async work
     }
-  }, [])
+  }, [shouldAbort])
 
-  // 5. Global Timeout (15s) with cancellation
+  // 5. Global Timeout (15s) with session fallback
   useEffect(() => {
-    const timeout = setTimeout(() => {
-      if (!shouldAbort() && !navigationTriggered.current) {
-        console.error('[AuthCallback] Global Timeout triggered')
-        isCancelled.current = true
-        authResolved.current = true
-        navigationTriggered.current = true
-        Alert.alert('Login Timeout', 'Process took too long. Please try again.')
-        router.replace('/(auth)/login')
+    timeoutRef.current = setTimeout(async () => {
+      if (isCancelled.current || authResolved.current || navigationTriggered.current) return
+
+      console.log('[AuthCallback] Timeout check: verifying session before abort...')
+      const { data: { session } } = await supabase.auth.getSession()
+      
+      if (session) {
+        console.log('[AuthCallback] Timeout hit but session exists, recovering...')
+        await finalizeAuth()
+        return
       }
+
+      console.error('[AuthCallback] Global Timeout triggered')
+      abortToLogin('Login process timed out. Please try again.')
     }, 15000)
 
-    return () => clearTimeout(timeout)
-  }, [])
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current)
+        timeoutRef.current = null
+      }
+    }
+  }, [shouldAbort, finalizeAuth, abortToLogin])
 
   // 6. Auth Processing Core
   useEffect(() => {
-    const finalizeAuth = async () => {
-      if (shouldAbort()) return
-      
-      console.log('[AuthCallback] Finalizing auth resolution...')
-      
-      try {
-        // A. Session Stabilization Loop
-        let stableSession = null
-        for (let i = 0; i < 3; i++) {
-          if (shouldAbort()) return
-          console.log(`[AuthCallback] Session stabilization check ${i+1}/3`)
-          
-          const { data: { session } } = await supabase.auth.getSession()
-          if (session) {
-            stableSession = session
-            // Propagate to store immediately if found
-            setSession(session) 
-          }
-          
-          if (i < 2) await sleep(300) // Incremental stabilization delay
-        }
-
-        if (!stableSession) {
-          throw new Error('Session failed to stabilize')
-        }
-
-        // B. Store Hydration Check
-        console.log('[AuthCallback] Verifying store hydration...')
-        const storeState = useAuthStore.getState()
-        if (!storeState.isAuthenticated || !storeState.session) {
-          console.log('[AuthCallback] Store not yet hydrated, forcing sync...')
-          setSession(stableSession)
-          await sleep(200)
-        }
-
-        // C. Final Navigation Execution
-        if (shouldAbort() || navigationTriggered.current) return
-        
-        authResolved.current = true
-        navigationTriggered.current = true
-        
-        console.log('[AuthCallback] SUCCESS: Authentication fully resolved')
-        router.replace('/')
-      } catch (err: any) {
-        console.error('[AuthCallback] Finalization error:', err.message)
-        abortToLogin(err.message || 'Session stabilization failed')
-      }
-    }
-
-    const abortToLogin = (reason: string) => {
-      if (isCancelled.current || navigationTriggered.current) return
-      
-      console.error('[AuthCallback] ABORT:', reason)
-      isCancelled.current = true
-      authResolved.current = true
-      navigationTriggered.current = true
-      
-      Alert.alert('Login Failed', reason)
-      router.replace('/(auth)/login')
-    }
-
     const handleAuth = async () => {
       if (!currentUrl || shouldAbort()) return
       if (processingKey.current === currentUrl) return
@@ -245,7 +280,7 @@ export default function AuthCallback() {
         const intervals = [500, 1000, 1500, 2000]
         
         for (let i = 0; i < intervals.length; i++) {
-          if (shouldAbort()) break
+          if (shouldAbort()) return
           
           console.log(`[AuthCallback] Hydration check ${i+1}/${intervals.length}`)
           const { data: { session: retrySession } } = await supabase.auth.getSession()
@@ -256,7 +291,11 @@ export default function AuthCallback() {
             return
           }
           
-          await sleep(intervals[i])
+          const ok = await sleep(intervals[i])
+          if (!ok) {
+            console.log('[AuthCallback] Hydration loop aborted')
+            return
+          }
         }
 
         if (!shouldAbort()) {
@@ -266,11 +305,15 @@ export default function AuthCallback() {
         abortToLogin(err.message || 'Unknown authentication error')
       } finally {
         authInProgress.current = false
+        if (!authResolved.current) {
+          console.log('[AuthCallback] Cleaning up processing key after failure/cancel')
+          processingKey.current = null
+        }
       }
     }
 
     handleAuth()
-  }, [currentUrl])
+  }, [currentUrl, shouldAbort, finalizeAuth, abortToLogin, sleep])
 
   return (
     <View style={styles.container}>
