@@ -39,7 +39,8 @@ export default function LoginScreen() {
   const handleGoogleSignIn = async () => {
     try {
       setGoogleLoading(true)
-      const redirectUrl = Linking.createURL('/auth/callback')
+      const redirectUrl = 'neofit://auth/callback'
+      
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
@@ -47,18 +48,27 @@ export default function LoginScreen() {
           skipBrowserRedirect: true,
         },
       })
+      
       if (error) throw error
-      if (data.url) {
-        const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl)
-        if (result.type === 'success' && result.url) {
-          console.log('OAuth Browser success, redirecting to callback screen')
-          router.replace({
-            pathname: '/auth/callback',
-            params: { url: result.url }
-          })
+      if (!data?.url) throw new Error('No OAuth URL returned')
+
+      const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl)
+      
+      if (result.type === 'success' && result.url) {
+        const { queryParams } = Linking.parse(result.url)
+        const code = queryParams?.code
+        
+        if (typeof code === 'string') {
+          const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code)
+          if (exchangeError) throw exchangeError
+          // session state in _layout.tsx will react to onAuthStateChange
+        } else {
+          const errorDescription = queryParams?.error_description
+          if (typeof errorDescription === 'string') throw new Error(errorDescription)
         }
       }
     } catch (err: any) {
+      console.error('Google Sign-In Error:', err)
       Alert.alert('Google Sign-In failed', err.message ?? 'Please try again')
     } finally {
       setGoogleLoading(false)

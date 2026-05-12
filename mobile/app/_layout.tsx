@@ -6,6 +6,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { StyleSheet } from 'react-native'
 import * as WebBrowser from 'expo-web-browser'
+import * as Linking from 'expo-linking'
 import { queryClient } from '@/lib/queryClient'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/auth.store'
@@ -17,6 +18,11 @@ export default function RootLayout() {
   const { setSession, fetchProfile } = useAuthStore()
 
   useEffect(() => {
+    // Debug deep links
+    const subscription = Linking.addEventListener('url', ({ url }) => {
+      console.log('Deep link received:', url)
+    })
+
     // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session)
@@ -24,12 +30,16 @@ export default function RootLayout() {
     })
 
     // Listen for auth changes (OAuth callback, sign out, etc.)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription: authSubscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      console.log('Auth state changed:', _event, session?.user?.email)
       setSession(session)
       if (session?.user) fetchProfile(session.user.id)
     })
 
-    return () => subscription.unsubscribe()
+    return () => {
+      subscription.remove()
+      authSubscription.unsubscribe()
+    }
   }, [])
 
   return (
