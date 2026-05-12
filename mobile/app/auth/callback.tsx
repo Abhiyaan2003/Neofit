@@ -6,11 +6,20 @@ import {
   StyleSheet,
   Alert,
 } from 'react-native'
-import { useRouter, useLocalSearchParams } from 'expo-router'
+
+import {
+  useRouter,
+  useLocalSearchParams,
+} from 'expo-router'
+
 import * as Linking from 'expo-linking'
 
 import { supabase } from '@/lib/supabase'
-import { Colors, FontSize, FontWeight } from '@/constants/theme'
+import {
+  Colors,
+  FontSize,
+  FontWeight,
+} from '@/constants/theme'
 
 export default function AuthCallback() {
   const router = useRouter()
@@ -21,7 +30,8 @@ export default function AuthCallback() {
     error_description?: string
   }>()
 
-  const processedCode = useRef<string | null>(null)
+  const processedCode =
+    useRef<string | null>(null)
 
   useEffect(() => {
     let mounted = true
@@ -36,45 +46,67 @@ export default function AuthCallback() {
       router.replace('/(auth)/login')
     }
 
-    const handleExchange = async (code: string) => {
+    const handleExchange = async (
+      code: string
+    ) => {
       try {
-        if (processedCode.current === code) {
-          console.log('[AuthCallback] Code already processed')
+        if (
+          processedCode.current === code
+        ) {
+          console.log(
+            '[AuthCallback] Code already processed'
+          )
+
           return
         }
 
         processedCode.current = code
 
-        console.log('[AuthCallback] Exchanging code:', code)
+        console.log(
+          '[AuthCallback] Exchanging code:',
+          code
+        )
 
-        const { data, error } =
-          await supabase.auth.exchangeCodeForSession(code)
-
-        console.log('[AuthCallback] Exchange result:', data)
+        const { error } =
+          await supabase.auth.exchangeCodeForSession(
+            code
+          )
 
         if (error) {
-          console.error('[AuthCallback] Exchange error:', error)
+          console.error(
+            '[AuthCallback] Exchange error:',
+            error
+          )
+
           throw error
         }
 
-        // Verify session exists
         const {
           data: { session },
         } = await supabase.auth.getSession()
 
-        console.log('[AuthCallback] Session:', session)
+        console.log(
+          '[AuthCallback] Session:',
+          !!session
+        )
 
         if (session) {
           navigateHome()
         } else {
-          throw new Error('Session not established')
+          throw new Error(
+            'Session not established'
+          )
         }
       } catch (err: any) {
-        console.error('[AuthCallback] Auth failed:', err)
+        console.error(
+          '[AuthCallback] Auth failed:',
+          err
+        )
 
         Alert.alert(
           'Authentication Failed',
-          err?.message || 'Please try again'
+          err?.message ||
+          'Please try again'
         )
 
         navigateLogin()
@@ -83,77 +115,89 @@ export default function AuthCallback() {
 
     const processAuth = async () => {
       try {
-        // Check existing session first
+        // Existing session check
         const {
           data: { session },
         } = await supabase.auth.getSession()
 
         if (session) {
-          console.log('[AuthCallback] Existing session found')
+          console.log(
+            '[AuthCallback] Existing session found'
+          )
+
           navigateHome()
+
           return
         }
 
-        // Handle OAuth errors
-        if (params.error || params.error_description) {
+        // OAuth errors
+        if (
+          params.error ||
+          params.error_description
+        ) {
           throw new Error(
             String(
               params.error_description ||
-                params.error ||
-                'OAuth authentication failed'
+              params.error ||
+              'OAuth authentication failed'
             )
           )
         }
 
         let code: string | null = null
 
-        // 1. Try router params
-        if (typeof params.code === 'string') {
+        // Try params first
+        if (
+          typeof params.code === 'string'
+        ) {
           code = params.code
-          console.log('[AuthCallback] Code from params')
+
+          console.log(
+            '[AuthCallback] Code from params'
+          )
         }
 
-        // 2. Try current URL
+        // Fallback: initial URL
         if (!code) {
-          const currentUrl = Linking.useURL()
-
-          if (currentUrl) {
-            console.log('[AuthCallback] Current URL:', currentUrl)
-
-            const parsed = Linking.parse(currentUrl)
-
-            if (typeof parsed.queryParams?.code === 'string') {
-              code = parsed.queryParams.code
-            }
-          }
-        }
-
-        // 3. Try initial URL
-        if (!code) {
-          const initialUrl = await Linking.getInitialURL()
+          const initialUrl =
+            await Linking.getInitialURL()
 
           if (initialUrl) {
-            console.log('[AuthCallback] Initial URL:', initialUrl)
+            console.log(
+              '[AuthCallback] Initial URL:',
+              initialUrl
+            )
 
-            const parsed = Linking.parse(initialUrl)
+            const parsed =
+              Linking.parse(initialUrl)
 
-            if (typeof parsed.queryParams?.code === 'string') {
-              code = parsed.queryParams.code
+            if (
+              typeof parsed.queryParams
+                ?.code === 'string'
+            ) {
+              code =
+                parsed.queryParams.code
             }
           }
         }
 
         if (!code) {
-          throw new Error('No authentication code found')
+          throw new Error(
+            'No authentication code found'
+          )
         }
 
         await handleExchange(code)
       } catch (err: any) {
-        console.error('[AuthCallback] Process failed:', err)
+        console.error(
+          '[AuthCallback] Process failed:',
+          err
+        )
 
         Alert.alert(
           'Login Failed',
-          err?.message || 'Authentication failed'
+          err?.message ||
+          'Authentication failed'
         )
 
         navigateLogin()
@@ -162,9 +206,10 @@ export default function AuthCallback() {
 
     processAuth()
 
-    // Safety timeout
     const timeout = setTimeout(() => {
-      console.warn('[AuthCallback] Timeout reached')
+      console.warn(
+        '[AuthCallback] Timeout reached'
+      )
 
       navigateLogin()
     }, 15000)
@@ -192,7 +237,8 @@ export default function AuthCallback() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor:
+      Colors.background,
     justifyContent: 'center',
     alignItems: 'center',
     gap: 16,
