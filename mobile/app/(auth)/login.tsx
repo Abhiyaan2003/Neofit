@@ -37,43 +37,88 @@ export default function LoginScreen() {
   }
 
   const handleGoogleSignIn = async () => {
-    try {
-      setGoogleLoading(true)
-      const redirectUrl = 'neofit://auth/callback'
-      
-      const { data, error } = await supabase.auth.signInWithOAuth({
+  try {
+    setGoogleLoading(true)
+
+    const redirectUrl = 'neofit://auth/callback'
+
+    console.log(
+      '[Login] Starting Google OAuth:',
+      redirectUrl
+    )
+
+    // Start OAuth flow
+    const { data, error } =
+      await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
           redirectTo: redirectUrl,
           skipBrowserRedirect: true,
         },
       })
-      
-      if (error) throw error
-      if (!data?.url) throw new Error('No OAuth URL returned')
 
-      const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl)
-      
-      if (result.type === 'success' && result.url) {
-        const { queryParams } = Linking.parse(result.url)
-        const code = queryParams?.code
-        
-        if (typeof code === 'string') {
-          const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code)
-          if (exchangeError) throw exchangeError
-          // session state in _layout.tsx will react to onAuthStateChange
-        } else {
-          const errorDescription = queryParams?.error_description
-          if (typeof errorDescription === 'string') throw new Error(errorDescription)
-        }
-      }
-    } catch (err: any) {
-      console.error('Google Sign-In Error:', err)
-      Alert.alert('Google Sign-In failed', err.message ?? 'Please try again')
-    } finally {
-      setGoogleLoading(false)
+    if (error) {
+      console.error(
+        '[Login] signInWithOAuth error:',
+        error
+      )
+
+      throw error
     }
+
+    if (!data?.url) {
+      throw new Error('No OAuth URL returned')
+    }
+
+    console.log(
+      '[Login] OAuth URL received, opening browser...'
+    )
+
+    // Open Google auth browser
+    const result =
+      await WebBrowser.openAuthSessionAsync(
+        data.url,
+        redirectUrl
+      )
+
+    console.log(
+      '[Login] WebBrowser result:',
+      result.type
+    )
+
+    if (result.type === 'cancel') {
+      Alert.alert(
+        'Login Cancelled',
+        'Google sign-in was cancelled'
+      )
+    }
+
+    if (result.type === 'dismiss') {
+      console.log(
+        '[Login] Browser dismissed, waiting for deep link callback...'
+      )
+    }
+
+    if (result.type === 'success') {
+      console.log(
+        '[Login] OAuth completed, callback screen should now handle session exchange'
+      )
+    }
+  } catch (err: any) {
+    console.error(
+      '[Login] Google Sign-In Error:',
+      err
+    )
+
+    Alert.alert(
+      'Google Sign-In failed',
+      err?.message || 'Please try again'
+    )
+  } finally {
+    setGoogleLoading(false)
   }
+}
+
 
   return (
     <KeyboardAvoidingView
