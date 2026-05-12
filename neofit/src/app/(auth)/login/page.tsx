@@ -53,7 +53,7 @@ export default function LoginPage() {
     const supabase = createClient()
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: "https://neofit-two.vercel.app/auth/callback" },
+      options: { redirectTo: `${window.location.origin}/auth/callback` },
     })
     if (error) {
       if (error.message.toLowerCase().includes('provider') || error.message.toLowerCase().includes('not enabled')) {

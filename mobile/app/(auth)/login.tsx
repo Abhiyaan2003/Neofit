@@ -51,13 +51,11 @@ export default function LoginScreen() {
       if (data.url) {
         const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl)
         if (result.type === 'success' && result.url) {
-          // Extract tokens from URL and set session
-          const url = new URL(result.url)
-          const access_token = url.searchParams.get('access_token')
-          const refresh_token = url.searchParams.get('refresh_token')
-          if (access_token && refresh_token) {
-            await supabase.auth.setSession({ access_token, refresh_token })
-          }
+          console.log('OAuth Browser success, redirecting to callback screen')
+          router.replace({
+            pathname: '/auth/callback',
+            params: { url: result.url }
+          })
         }
       }
     } catch (err: any) {

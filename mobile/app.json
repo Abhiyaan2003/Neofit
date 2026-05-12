@@ -6,7 +6,7 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
-    "scheme": "com.neofit.app",
+    "scheme": "neofit",
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
