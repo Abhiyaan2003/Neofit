@@ -9,6 +9,7 @@ import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as WebBrowser from 'expo-web-browser'
 import * as Linking from 'expo-linking'
+import * as AuthSession from 'expo-auth-session'
 import { LinearGradient } from 'expo-linear-gradient'
 import { Ionicons } from '@expo/vector-icons'
 import { supabase } from '@/lib/supabase'
@@ -40,7 +41,12 @@ export default function LoginScreen() {
   try {
     setGoogleLoading(true)
 
-    const redirectUrl = 'neofit://auth/callback'
+    const redirectUrl = AuthSession.makeRedirectUri({
+      scheme: 'neofit',
+      path: 'auth/callback',
+    })
+
+    console.log('[Login] Standard Redirect URI:', redirectUrl)
 
     console.log(
       '[Login] Starting Google OAuth:',

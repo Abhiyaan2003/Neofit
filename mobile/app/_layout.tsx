@@ -26,7 +26,7 @@ export default function RootLayout() {
     const linkingSubscription = Linking.addEventListener(
       'url',
       ({ url }) => {
-        console.log('[DeepLink]', url)
+        console.log('[RootLayout] Deep link received:', url)
       }
     )
 
@@ -70,17 +70,19 @@ export default function RootLayout() {
     } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         console.log(
-          '[AuthStateChange]',
+          '[RootLayout] AuthStateChange:',
           event,
-          session?.user?.email
+          'User:',
+          session?.user?.email || 'None'
         )
 
         setSession(session)
 
         if (session?.user) {
+          console.log('[RootLayout] Fetching profile for user:', session.user.id)
           fetchProfile(session.user.id).catch(err => {
             console.error(
-              '[AuthStateChange] Profile fetch failed:',
+              '[RootLayout] Profile fetch failed:',
               err
             )
           })

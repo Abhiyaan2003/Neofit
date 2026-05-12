@@ -5,6 +5,7 @@ import { useForm, Controller } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Ionicons } from '@expo/vector-icons'
+import * as AuthSession from 'expo-auth-session'
 import { supabase } from '@/lib/supabase'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
@@ -22,7 +23,10 @@ export default function ForgotPasswordScreen() {
 
   const onSubmit = async (data: FormData) => {
     const { error } = await supabase.auth.resetPasswordForEmail(data.email, {
-      redirectTo: 'com.neofit.app://reset-password',
+      redirectTo: AuthSession.makeRedirectUri({
+        scheme: 'neofit',
+        path: 'auth/callback',
+      }),
     })
     if (error) Alert.alert('Error', error.message)
     else setSent(true)

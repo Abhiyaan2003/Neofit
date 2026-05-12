@@ -43,27 +43,23 @@ export const useAuthStore =
 
     setSession: session => {
       console.log(
-        '[AuthStore] setSession:',
-        !!session
+        '[AuthStore] setSession | Active:',
+        !!session,
+        'User:',
+        session?.user?.email || 'None'
       )
 
       set({
         session,
         user: session?.user ?? null,
         isAuthenticated: !!session,
-
-        /**
-         * IMPORTANT:
-         * Do NOT block UI loading
-         * waiting for profile fetch.
-         */
         isLoading: false,
       })
     },
 
     setProfile: profile => {
       console.log(
-        '[AuthStore] setProfile:',
+        '[AuthStore] setProfile | Exists:',
         !!profile
       )
 
@@ -77,7 +73,7 @@ export const useAuthStore =
     ) => {
       try {
         console.log(
-          '[AuthStore] Fetching profile:',
+          '[AuthStore] Fetching profile for:',
           userId
         )
 
@@ -90,8 +86,8 @@ export const useAuthStore =
 
         if (error) {
           console.error(
-            '[AuthStore] Profile fetch error:',
-            error
+            '[AuthStore] Profile query error:',
+            error.message
           )
 
           return
@@ -99,14 +95,9 @@ export const useAuthStore =
 
         if (!data) {
           console.warn(
-            '[AuthStore] No profile found'
+            '[AuthStore] Profile row missing for user. This is okay, continuing...'
           )
 
-          /**
-           * IMPORTANT:
-           * User is still authenticated
-           * even without profile row.
-           */
           set({
             profile: null,
           })
@@ -115,16 +106,16 @@ export const useAuthStore =
         }
 
         console.log(
-          '[AuthStore] Profile loaded'
+          '[AuthStore] Profile fetch success'
         )
 
         set({
           profile: data as Profile,
         })
-      } catch (err) {
+      } catch (err: any) {
         console.error(
-          '[AuthStore] fetchProfile failed:',
-          err
+          '[AuthStore] fetchProfile exception:',
+          err?.message || err
         )
       }
     },
