@@ -8,7 +8,7 @@ import {
 } from 'react-native'
 
 import * as Linking from 'expo-linking'
-import { useRouter } from 'expo-router'
+import { useRouter, useGlobalSearchParams, useLocalSearchParams } from 'expo-router'
 import { useAuthStore } from '@/store/auth.store'
 
 import { supabase } from '@/lib/supabase'
@@ -22,6 +22,8 @@ import {
 export default function AuthCallback() {
   const router = useRouter()
   const incomingUrl = Linking.useURL()
+  const globalParams = useGlobalSearchParams()
+  const localParams = useLocalSearchParams<{ url?: string }>()
   const { setSession } = useAuthStore()
   const [currentUrl, setCurrentUrl] = useState<string | null>(null)
 
@@ -137,16 +139,17 @@ export default function AuthCallback() {
 
   // 3. Sync URL with functional state to prevent stale closures
   useEffect(() => {
-    if (incomingUrl) {
+    const urlToSync = localParams.url || incomingUrl
+    if (urlToSync) {
       setCurrentUrl(prev => {
-        if (prev !== incomingUrl) {
-          console.log('[AuthCallback] URL Sync:', incomingUrl)
-          return incomingUrl
+        if (prev !== urlToSync) {
+          console.log('[AuthCallback] URL Sync:', urlToSync)
+          return urlToSync
         }
         return prev
       })
     }
-  }, [incomingUrl])
+  }, [incomingUrl, localParams.url])
 
   // 4. Listen for deep links (Event driven)
   useEffect(() => {
@@ -189,16 +192,64 @@ export default function AuthCallback() {
   }, [shouldAbort, finalizeAuth, abortToLogin])
 
   // 6. Auth Processing Core
+  const codeParam = typeof globalParams.code === 'string' ? globalParams.code : Array.isArray(globalParams.code) ? globalParams.code[0] : null
+  const tokenParam = typeof globalParams.access_token === 'string' ? globalParams.access_token : Array.isArray(globalParams.access_token) ? globalParams.access_token[0] : null
+  const errorParam = typeof globalParams.error === 'string' ? globalParams.error : typeof globalParams.error_description === 'string' ? globalParams.error_description : null
+
   useEffect(() => {
     const handleAuth = async () => {
-      if (!currentUrl || shouldAbort()) return
-      if (processingKey.current === currentUrl) return
+      if (shouldAbort()) return
+      
+      const authParams: Record<string, string> = {}
+      if (codeParam) authParams.code = codeParam
+      if (tokenParam) authParams.access_token = tokenParam
+      if (errorParam) authParams.error = errorParam
+
+      if (currentUrl) {
+        try {
+          const queryIdx = currentUrl.indexOf('?')
+          const hashIdx = currentUrl.indexOf('#')
+          
+          let queryStr = ''
+          let hashStr = ''
+          
+          if (queryIdx > -1) {
+            queryStr = currentUrl.substring(queryIdx + 1, hashIdx > -1 ? hashIdx : undefined)
+          }
+          if (hashIdx > -1) {
+            hashStr = currentUrl.substring(hashIdx + 1)
+          }
+
+          const parsePairs = (str: string) => {
+            if (!str) return
+            str.split('&').forEach(part => {
+              const eqIdx = part.indexOf('=')
+              if (eqIdx > -1) {
+                const key = decodeURIComponent(part.slice(0, eqIdx))
+                const val = decodeURIComponent(part.slice(eqIdx + 1))
+                if (key) authParams[key] = val
+              }
+            })
+          }
+          
+          parsePairs(queryStr)
+          parsePairs(hashStr)
+        } catch (e) {
+          console.error('[AuthCallback] URL parse error:', e)
+        }
+      }
+
+      const hasDirectParams = !!(authParams.code || authParams.access_token || authParams.error)
+      if (!currentUrl && !hasDirectParams) return
+      
+      const procKey = currentUrl || JSON.stringify(authParams)
+      if (processingKey.current === procKey) return
       if (authInProgress.current) return
       
       try {
         authInProgress.current = true
-        processingKey.current = currentUrl
-        console.log('[AuthCallback] Processing START:', currentUrl)
+        processingKey.current = procKey
+        console.log('[AuthCallback] Processing START:', procKey)
 
         // A. Early Session Check
         const { data: { session: preSession } } = await supabase.auth.getSession()
@@ -208,32 +259,7 @@ export default function AuthCallback() {
           return
         }
 
-        // B. Safe Parameter Parsing
-        const authParams: Record<string, string> = {}
-        const urlParts = currentUrl.split('?')
-        if (urlParts.length > 1) {
-          const queryStr = urlParts[1].split('#')[0]
-          queryStr.split('&').forEach(part => {
-            const eqIdx = part.indexOf('=')
-            if (eqIdx > -1) {
-              const key = part.slice(0, eqIdx)
-              const val = part.slice(eqIdx + 1)
-              authParams[decodeURIComponent(key)] = decodeURIComponent(val)
-            }
-          })
-        }
 
-        const fragParts = currentUrl.split('#')
-        if (fragParts.length > 1) {
-          fragParts[1].split('&').forEach(part => {
-            const eqIdx = part.indexOf('=')
-            if (eqIdx > -1) {
-              const key = part.slice(0, eqIdx)
-              const val = part.slice(eqIdx + 1)
-              authParams[decodeURIComponent(key)] = decodeURIComponent(val)
-            }
-          })
-        }
 
         if (shouldAbort()) return
         console.log('[AuthCallback] Keys found:', Object.keys(authParams))
@@ -313,7 +339,7 @@ export default function AuthCallback() {
     }
 
     handleAuth()
-  }, [currentUrl, shouldAbort, finalizeAuth, abortToLogin, sleep])
+  }, [currentUrl, shouldAbort, finalizeAuth, abortToLogin, sleep, codeParam, tokenParam, errorParam])
 
   return (
     <View style={styles.container}>
