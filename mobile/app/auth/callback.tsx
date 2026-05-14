@@ -12,6 +12,7 @@ import { useRouter, useGlobalSearchParams, useLocalSearchParams } from 'expo-rou
 import { useAuthStore } from '@/store/auth.store'
 
 import { supabase } from '@/lib/supabase'
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from '@/constants/config'
 
 import {
   Colors,
@@ -26,25 +27,36 @@ export default function AuthCallback() {
   const localParams = useLocalSearchParams<{ url?: string }>()
   const { setSession } = useAuthStore()
   const [currentUrl, setCurrentUrl] = useState<string | null>(null)
+  const [statusText, setStatusText] = useState('Completing secure login...')
 
-  
-  // 1. Enterprise State Orchestration
+  // ─── Startup Validation ──────────────────────────────────────────
+  useEffect(() => {
+    console.log('[AuthCallback] Mounted')
+    console.log('[AuthCallback] SUPABASE_URL:', SUPABASE_URL)
+    console.log('[AuthCallback] SUPABASE_ANON_KEY:', SUPABASE_ANON_KEY ? '✅ present' : '🔴 MISSING')
+
+    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+      console.error('[AuthCallback] 🔴 FATAL: Supabase credentials are missing!')
+      Alert.alert('Configuration Error', 'Supabase credentials are missing. Please reinstall the app.')
+    }
+  }, [])
+
+  // ─── State Orchestration ─────────────────────────────────────────
   const processingKey = useRef<string | null>(null)
   const authResolved = useRef(false)
   const authInProgress = useRef(false)
   const navigationTriggered = useRef(false)
   const isCancelled = useRef(false)
-  const timeoutRef =
-  useRef<ReturnType<typeof setTimeout> | null>(null)
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // 1.5. Initial State Reset (Fast Refresh / Hot Reload safety)
+  // Initial State Reset (Fast Refresh / Hot Reload safety)
   useEffect(() => {
     authResolved.current = false
     navigationTriggered.current = false
     isCancelled.current = false
   }, [])
 
-  // 2. Async Infrastructure
+  // ─── Async Infrastructure ────────────────────────────────────────
   const shouldAbort = useCallback(() => isCancelled.current, [])
 
   const sleep = useCallback(
@@ -86,16 +98,17 @@ export default function AuthCallback() {
   }, [router, shouldAbort])
 
   const finalizeAuth = useCallback(async () => {
-    // 0. Double-execution guard
+    // Double-execution guard
     if (authResolved.current || navigationTriggered.current) {
       console.log('[AuthCallback] finalizeAuth already resolved or triggered, skipping...')
       return
     }
     
     console.log('[AuthCallback] Finalizing auth resolution...')
+    setStatusText('Verifying session...')
     
     try {
-      // 1. Immediate Session Verification (PRE-LOCK)
+      // Immediate Session Verification
       const { data: { session } } = await supabase.auth.getSession()
       
       if (!session) {
@@ -103,28 +116,28 @@ export default function AuthCallback() {
         throw new Error('Session missing during finalization')
       }
 
-      // 2. Lock AFTER session confirmation
+      // Lock AFTER session confirmation
       authResolved.current = true
       navigationTriggered.current = true
 
-      console.log('[AuthCallback] Session verified. Syncing store and navigating...')
+      console.log('[AuthCallback] Session verified for:', session.user?.email)
+      setStatusText('Session verified! Entering app...')
       
-      // 3. Background Store Sync
-      console.log('[AuthCallback] Syncing store state...')
+      // Store Sync
       setSession(session)
 
-      // 3.5. Zustand Propagation Delay (Stabilization)
+      // Zustand Propagation Delay
       const ok = await sleep(300)
       if (!ok) {
         console.log('[AuthCallback] Navigation aborted during store sync delay')
         return
       }
 
-      // 4. Final Navigation Execution (STABILIZED)
+      // Final Navigation
       console.log('[AuthCallback] SUCCESS: Authentication resolved. Entering app.')
       router.replace('/')
 
-      // 4.5 Clear timeout after successful navigation
+      // Clear timeout after successful navigation
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current)
         timeoutRef.current = null
@@ -137,7 +150,7 @@ export default function AuthCallback() {
     }
   }, [router, setSession, sleep, abortToLogin])
 
-  // 3. Sync URL with functional state to prevent stale closures
+  // ─── URL Sync ────────────────────────────────────────────────────
   useEffect(() => {
     const urlToSync = localParams.url || incomingUrl
     if (urlToSync) {
@@ -151,7 +164,7 @@ export default function AuthCallback() {
     }
   }, [incomingUrl, localParams.url])
 
-  // 4. Listen for deep links (Event driven)
+  // ─── Deep Link Listener ──────────────────────────────────────────
   useEffect(() => {
     const subscription = Linking.addEventListener('url', ({ url }) => {
       if (url && !shouldAbort()) {
@@ -165,23 +178,29 @@ export default function AuthCallback() {
     }
   }, [shouldAbort])
 
-  // 5. Global Timeout (15s) with session fallback
+  // ─── Global Timeout (20s) ────────────────────────────────────────
   useEffect(() => {
     timeoutRef.current = setTimeout(async () => {
       if (isCancelled.current || authResolved.current || navigationTriggered.current) return
 
       console.log('[AuthCallback] Timeout check: verifying session before abort...')
-      const { data: { session } } = await supabase.auth.getSession()
+      setStatusText('Checking session status...')
       
-      if (session) {
-        console.log('[AuthCallback] Timeout hit but session exists, recovering...')
-        await finalizeAuth()
-        return
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        
+        if (session) {
+          console.log('[AuthCallback] Timeout hit but session exists, recovering...')
+          await finalizeAuth()
+          return
+        }
+      } catch (err: any) {
+        console.error('[AuthCallback] Timeout session check failed:', err.message)
       }
 
-      console.error('[AuthCallback] Global Timeout triggered')
-      abortToLogin('Login process timed out. Please try again.')
-    }, 15000)
+      console.error('[AuthCallback] Global Timeout triggered — no session after 20s')
+      abortToLogin('Login process timed out. Please check your internet connection and try again.')
+    }, 20000)
 
     return () => {
       if (timeoutRef.current) {
@@ -191,7 +210,7 @@ export default function AuthCallback() {
     }
   }, [shouldAbort, finalizeAuth, abortToLogin])
 
-  // 6. Auth Processing Core
+  // ─── Auth Processing Core ────────────────────────────────────────
   const codeParam = typeof globalParams.code === 'string' ? globalParams.code : Array.isArray(globalParams.code) ? globalParams.code[0] : null
   const tokenParam = typeof globalParams.access_token === 'string' ? globalParams.access_token : Array.isArray(globalParams.access_token) ? globalParams.access_token[0] : null
   const errorParam = typeof globalParams.error === 'string' ? globalParams.error : typeof globalParams.error_description === 'string' ? globalParams.error_description : null
@@ -249,7 +268,9 @@ export default function AuthCallback() {
       try {
         authInProgress.current = true
         processingKey.current = procKey
-        console.log('[AuthCallback] Processing START:', procKey)
+        console.log('[AuthCallback] Processing START')
+        console.log('[AuthCallback] Auth params keys:', Object.keys(authParams))
+        setStatusText('Processing authentication...')
 
         // A. Early Session Check
         const { data: { session: preSession } } = await supabase.auth.getSession()
@@ -259,22 +280,23 @@ export default function AuthCallback() {
           return
         }
 
-
-
         if (shouldAbort()) return
-        console.log('[AuthCallback] Keys found:', Object.keys(authParams))
 
-        // C. Error check
+        // B. Error check
         const error = authParams.error || authParams.error_description
         if (error) throw new Error(error)
 
-        // D. PKCE Flow
+        // C. PKCE Flow
         if (authParams.code) {
           console.log('[AuthCallback] PKCE Exchange start')
-          const { error: pkceErr } = await supabase.auth.exchangeCodeForSession(authParams.code)
+          setStatusText('Exchanging authorization code...')
+          
+          const { data, error: pkceErr } = await supabase.auth.exchangeCodeForSession(authParams.code)
           
           if (pkceErr) {
-            console.log('[AuthCallback] PKCE error, checking for auto-restoration...')
+            console.error('[AuthCallback] PKCE error:', pkceErr.message)
+            
+            // Check if session was created despite error (auto-restoration)
             const { data: { session: pkceRetry } } = await supabase.auth.getSession()
             if (pkceRetry) {
               console.log('[AuthCallback] PKCE success via auto-restoration')
@@ -283,15 +305,19 @@ export default function AuthCallback() {
             }
             throw pkceErr
           }
+          
+          console.log('[AuthCallback] PKCE exchange successful')
           await finalizeAuth()
           return
         }
 
-        // E. Implicit Flow
+        // D. Implicit Flow
         const at = authParams.access_token
         const rt = authParams.refresh_token
         if (at && rt) {
           console.log('[AuthCallback] Implicit Flow start')
+          setStatusText('Setting session tokens...')
+          
           const { error: impErr } = await supabase.auth.setSession({
             access_token: at,
             refresh_token: rt,
@@ -301,8 +327,9 @@ export default function AuthCallback() {
           return
         }
 
-        // F. Enterprise Hydration Loop (4 retries with backoff)
+        // E. Hydration Loop (4 retries with backoff)
         console.log('[AuthCallback] No direct data, entering backoff hydration loop...')
+        setStatusText('Waiting for session...')
         const intervals = [500, 1000, 1500, 2000]
         
         for (let i = 0; i < intervals.length; i++) {
@@ -328,6 +355,7 @@ export default function AuthCallback() {
           throw new Error('Authentication parameters invalid or session missing')
         }
       } catch (err: any) {
+        console.error('[AuthCallback] Auth error:', err.message)
         abortToLogin(err.message || 'Unknown authentication error')
       } finally {
         authInProgress.current = false
@@ -344,7 +372,7 @@ export default function AuthCallback() {
   return (
     <View style={styles.container}>
       <ActivityIndicator size="large" color={Colors.accent} />
-      <Text style={styles.text}>Completing secure login...</Text>
+      <Text style={styles.text}>{statusText}</Text>
     </View>
   )
 }
