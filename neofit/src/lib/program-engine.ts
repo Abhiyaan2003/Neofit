@@ -114,6 +114,13 @@ export async function activateProgram(program: Program): Promise<boolean> {
       }
     }
 
+    // ── 5. Update user profile with program info ───────────────────────
+    await supabase.from('profiles').update({
+      physique_program: program.id,
+      split_type: program.split_type,
+      workout_frequency: program.daysPerWeek
+    }).eq('id', user.id)
+
     return true
   } catch (err) {
     console.error('activateProgram error:', err)
