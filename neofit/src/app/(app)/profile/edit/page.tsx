@@ -4,13 +4,27 @@ import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { useRouter } from 'next/navigation'
 import { useAuthStore } from '@/store/auth'
-import { ChevronLeft, Save } from 'lucide-react'
-import { GOAL_LABELS, EXPERIENCE_LABELS, SPLIT_LABELS } from '@/constants'
+import { ChevronLeft, Save, Check } from 'lucide-react'
+import { GOAL_LABELS, EXPERIENCE_LABELS, SPLIT_LABELS, GYM_PRESETS, EQUIPMENT_ITEMS } from '@/constants'
 import { PHYSIQUE_PROGRAMS } from '@/constants/physique-programs'
 import { Goal, PhysiqueProgram, ExperienceLevel, WorkoutFrequency, SplitType, OnboardingData, EquipmentItem, GymPreset } from '@/types'
 import { regenerateWorkoutPlanService } from '@/lib/workout-engine/generator-service'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
+
+const PRESETS: { id: GymPreset; label: string; description: string; emoji: string }[] = [
+  { id: 'college_gym', label: 'College Gym', description: 'Standard equipment — barbells, dumbbells, machines', emoji: '🏫' },
+  { id: 'full_gym', label: 'Full Gym', description: 'Commercial gym with all equipment', emoji: '🏋️' },
+  { id: 'minimal', label: 'Minimal Setup', description: 'Dumbbells, pull-up bar, resistance bands', emoji: '⚡' },
+  { id: 'dumbbell_only', label: 'Dumbbells Only', description: 'Just a set of dumbbells and a bench', emoji: '💪' },
+  { id: 'custom', label: 'Custom', description: 'Choose exactly what your gym has', emoji: '🔧' },
+]
+
+const EQUIPMENT_CATEGORIES = [
+  { category: 'Free Weights', items: EQUIPMENT_ITEMS.filter(e => ['dumbbells', 'barbell', 'bench', 'incline_bench', 'kettlebell'].includes(e.id)) },
+  { category: 'Machines', items: EQUIPMENT_ITEMS.filter(e => ['cable_machine', 'smith_machine', 'leg_press_machine', 'leg_extension_machine', 'leg_curl_machine', 'lat_pulldown_machine', 'chest_press_machine', 'calf_raise_machine'].includes(e.id)) },
+  { category: 'Functional', items: EQUIPMENT_ITEMS.filter(e => ['pullup_bar', 'resistance_bands', 'dip_bars', 'plyo_box', 'ab_wheel', 'trx'].includes(e.id)) },
+]
 
 export default function EditProfilePage() {
   const router = useRouter()
@@ -61,7 +75,7 @@ export default function EditProfilePage() {
   if (!profile) return null
 
   return (
-    <div className="px-5 pt-14 pb-40 min-h-screen">
+    <div className="px-5 pt-14 pb-52 min-h-screen">
       <div className="flex items-center mb-6">
         <button onClick={() => router.back()} className="p-2 -ml-2 text-[#A8B0BE] hover:text-white transition-colors">
           <ChevronLeft className="w-6 h-6" />
@@ -69,7 +83,73 @@ export default function EditProfilePage() {
         <h1 className="text-xl font-bold ml-2">Edit Training Plan</h1>
       </div>
 
-      <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-8">
+        {/* Equipment Selection - PRIORITY #1 */}
+        <section>
+          <div className="flex items-center justify-between mb-3">
+            <label className="text-xs text-[#8BAE9E] uppercase tracking-wider font-bold">Equipment Setup</label>
+            <span className="text-[10px] text-[#A8B0BE] bg-white/5 px-2 py-0.5 rounded-full">
+              {(formData.selected_equipment || []).length} items
+            </span>
+          </div>
+          
+          <div className="grid grid-cols-2 gap-2 mb-4">
+            {PRESETS.map((preset) => (
+              <button
+                key={preset.id}
+                onClick={() => {
+                  const items = preset.id === 'custom' ? (formData.selected_equipment || []) : GYM_PRESETS[preset.id]
+                  setFormData(prev => ({ ...prev, gym_preset: preset.id, selected_equipment: items }))
+                }}
+                className={`flex flex-col gap-1 p-3 rounded-xl border text-left transition-all ${
+                  formData.gym_preset === preset.id
+                    ? 'bg-[#8BAE9E]/10 border-[#8BAE9E]'
+                    : 'bg-[#1D212B] border-white/5 hover:border-white/10'
+                }`}
+              >
+                <span className="text-lg">{preset.emoji}</span>
+                <div className="font-bold text-xs text-white">{preset.label}</div>
+              </button>
+            ))}
+          </div>
+
+          <div className="space-y-4 bg-white/[0.02] p-4 rounded-2xl border border-white/5">
+            {EQUIPMENT_CATEGORIES.map((cat) => (
+              <div key={cat.category}>
+                <p className="text-[10px] text-[#A8B0BE] uppercase tracking-widest mb-2 px-1">{cat.category}</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {cat.items.map((item) => {
+                    const isSelected = (formData.selected_equipment || []).includes(item.id)
+                    return (
+                      <button
+                        key={item.id}
+                        onClick={() => {
+                          const current = formData.selected_equipment || []
+                          const next = isSelected 
+                            ? current.filter(e => e !== item.id)
+                            : [...current, item.id]
+                          setFormData(prev => ({ ...prev, selected_equipment: next, gym_preset: 'custom' }))
+                        }}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold border transition-all ${
+                          isSelected
+                            ? 'bg-[#8BAE9E]/20 border-[#8BAE9E] text-[#8BAE9E]'
+                            : 'bg-[#0F1115] border-white/5 text-[#A8B0BE]'
+                        }`}
+                      >
+                        {isSelected && <Check className="w-2.5 h-2.5" />}
+                        {item.icon} {item.label}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <div className="h-px bg-white/5 mx-2" />
+
+        <div className="flex flex-col gap-6 opacity-80">
         {/* Goal */}
         <section>
           <label className="text-xs text-[#A8B0BE] uppercase tracking-wider mb-2 block font-medium">Primary Goal</label>
@@ -201,7 +281,7 @@ export default function EditProfilePage() {
       </div>
 
       {/* Floating Save Button */}
-      <div className="fixed bottom-20 left-0 right-0 p-5 z-50 pointer-events-none flex justify-center">
+      <div className="fixed bottom-24 left-0 right-0 p-5 z-50 pointer-events-none flex justify-center">
         <button
           onClick={handleSave}
           disabled={isSaving}
