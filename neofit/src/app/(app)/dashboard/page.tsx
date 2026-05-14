@@ -52,25 +52,40 @@ export default function DashboardPage() {
   const loadDashboard = async () => {
     const supabase = createClient()
     
-    // Load today's workout
+    // 1. Get active split first
+    const { data: activeSplit } = await supabase
+      .from('workout_splits')
+      .select('id, valid_until, created_at')
+      .eq('user_id', profile!.id)
+      .eq('is_active', true)
+      .single()
+
+    const activeSplitId = activeSplit?.id
+
+    // Load today's workout for the ACTIVE split
     const dayOfWeek = TODAY === 0 ? 7 : TODAY
-    const { data: workouts } = await supabase
-      .from('workouts')
-      .select('*, workout_exercises(*, exercises(*))')
-      .eq('user_id', profile!.id)
-      .eq('day_of_week', dayOfWeek)
-      .limit(1)
+    if (activeSplitId) {
+      const { data: workouts } = await supabase
+        .from('workouts')
+        .select('*, workout_exercises(*, exercises(*))')
+        .eq('user_id', profile!.id)
+        .eq('split_id', activeSplitId) // CRITICAL: Filter by active split
+        .eq('day_of_week', dayOfWeek)
+        .limit(1)
 
-    if (workouts && workouts.length > 0) setTodayWorkout(workouts[0])
+      if (workouts && workouts.length > 0) setTodayWorkout(workouts[0])
+      else setTodayWorkout(null) // Reset if no workout for this day in the NEW split
 
-    // Load all workouts for the week
-    const { data: allW } = await supabase
-      .from('workouts')
-      .select('*')
-      .eq('user_id', profile!.id)
-      .order('day_of_week')
+      // Load all workouts for the week for the ACTIVE split
+      const { data: allW } = await supabase
+        .from('workouts')
+        .select('*')
+        .eq('user_id', profile!.id)
+        .eq('split_id', activeSplitId) // CRITICAL: Filter by active split
+        .order('day_of_week')
 
-    if (allW) setAllWorkouts(allW)
+      if (allW) setAllWorkouts(allW)
+    }
 
     // Check if today's session was completed
     const today = new Date().toISOString().split('T')[0]
@@ -86,18 +101,9 @@ export default function DashboardPage() {
     setCompletedToday(isTodayDone)
 
     // Load split info and calculate week
-    const { data: split } = await supabase
-      .from('workout_splits')
-      .select('valid_until, created_at')
-      .eq('user_id', profile!.id)
-      .eq('is_active', true)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .single()
-
-    if (split) {
-      const validUntil = new Date(split.valid_until)
-      const createdAt = new Date(split.created_at)
+    if (activeSplit) {
+      const validUntil = new Date(activeSplit.valid_until)
+      const createdAt = new Date(activeSplit.created_at)
       const now = new Date()
       
       const isExpired = now > validUntil
@@ -108,7 +114,7 @@ export default function DashboardPage() {
       const weekNumber = Math.min(4, Math.floor(diffDays / 7) + 1)
       const isDeload = weekNumber === 4
 
-      setSplitInfo({ valid_until: split.valid_until, week_number: weekNumber, is_deload: isDeload })
+      setSplitInfo({ valid_until: activeSplit.valid_until, week_number: weekNumber, is_deload: isDeload })
     }
 
     // Smart Streak Engine Integration

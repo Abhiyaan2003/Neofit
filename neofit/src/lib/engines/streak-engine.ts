@@ -78,3 +78,47 @@ export function evaluateStreak(
     is_broken: isBroken
   }
 }
+
+/**
+ * Specifically handles incrementing a streak when a workout is completed.
+ * Logic:
+ * 1. If no last workout, streak starts at 1.
+ * 2. If last workout was today, streak remains same (already incremented).
+ * 3. If last workout was within grace period, increment by 1.
+ * 4. If last workout was outside grace period, streak resets to 1.
+ */
+export function incrementStreak(
+  currentStreak: number,
+  longestStreak: number,
+  lastWorkoutDate: string | null,
+  frequency: WorkoutFrequency | null
+) {
+  if (!lastWorkoutDate) {
+    return { current_streak: 1, longest_streak: Math.max(1, longestStreak) }
+  }
+
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const lastDate = new Date(lastWorkoutDate)
+  lastDate.setHours(0, 0, 0, 0)
+
+  const diffTime = Math.abs(today.getTime() - lastDate.getTime())
+  const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24))
+
+  if (diffDays === 0) {
+    // Already worked out today, don't increment
+    return { current_streak: currentStreak, longest_streak: longestStreak }
+  }
+
+  const maxGap = getMaxRestGap(frequency)
+  
+  let newStreak = 1
+  if (diffDays <= maxGap + 1) {
+    newStreak = currentStreak + 1
+  }
+
+  return {
+    current_streak: newStreak,
+    longest_streak: Math.max(newStreak, longestStreak)
+  }
+}

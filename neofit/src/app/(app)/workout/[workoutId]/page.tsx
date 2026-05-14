@@ -14,6 +14,7 @@ import {
   getProgressionSuggestion, formatLastPerformance,
   getProgressionEmoji, checkForPR, ExercisePerformance,
 } from '@/lib/engines/progression-engine'
+import { evaluateStreak, incrementStreak } from '@/lib/engines/streak-engine'
 import { getRankedSubstitutes } from '@/lib/engines/substitution-engine'
 import { EXERCISES } from '@/constants/exercises'
 import { Exercise } from '@/types'
@@ -300,13 +301,34 @@ export default function WorkoutSessionPage() {
     if (!session) return
 
     const supabase = createClient()
-    if (session.sessionId) {
+    if (session.sessionId && profile) {
       await supabase.from('workout_sessions').update({
         status: 'completed',
         completed_at: new Date().toISOString(),
         duration_seconds: elapsedSeconds,
         total_volume_kg: session.totalVolume,
       }).eq('id', session.sessionId)
+
+      const { data: lastSessions } = await supabase
+        .from('workout_sessions')
+        .select('completed_at')
+        .eq('user_id', profile.id)
+        .eq('status', 'completed')
+        .neq('id', session.sessionId) // get the one BEFORE this one
+        .order('completed_at', { ascending: false })
+        .limit(1)
+
+      const streakResult = incrementStreak(
+        profile.current_streak || 0,
+        profile.longest_streak || 0,
+        lastSessions?.[0]?.completed_at || null,
+        profile.workout_frequency
+      )
+
+      await supabase.from('profiles').update({
+        current_streak: streakResult.current_streak,
+        longest_streak: streakResult.longest_streak
+      }).eq('id', profile.id)
     }
 
     store.endSession()
