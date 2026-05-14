@@ -61,7 +61,7 @@ export default function EditProfilePage() {
   if (!profile) return null
 
   return (
-    <div className="px-5 pt-14 pb-24 min-h-screen">
+    <div className="px-5 pt-14 pb-40 min-h-screen">
       <div className="flex items-center mb-6">
         <button onClick={() => router.back()} className="p-2 -ml-2 text-[#A8B0BE] hover:text-white transition-colors">
           <ChevronLeft className="w-6 h-6" />
@@ -201,7 +201,7 @@ export default function EditProfilePage() {
       </div>
 
       {/* Floating Save Button */}
-      <div className="fixed bottom-0 left-0 right-0 p-5 bg-gradient-to-t from-[#0B0F19] to-transparent pointer-events-none flex justify-center">
+      <div className="fixed bottom-20 left-0 right-0 p-5 z-50 pointer-events-none flex justify-center">
         <button
           onClick={handleSave}
           disabled={isSaving}
