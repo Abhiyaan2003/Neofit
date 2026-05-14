@@ -50,163 +50,194 @@ export default function DashboardPage() {
   }, [profile]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadDashboard = async () => {
-    const supabase = createClient()
-    
-    // 1. Get active split first
-    const { data: activeSplit, error: splitErr } = await supabase
-      .from('workout_splits')
-      .select('id, valid_until, created_at')
-      .eq('user_id', profile!.id)
-      .eq('is_active', true)
-      .maybeSingle()
-
-    // Fallback: If no "active" split, get the most recent one
-    let targetSplit = activeSplit
-    if (!targetSplit) {
-      const { data: recentSplit } = await supabase
-        .from('workout_splits')
-        .select('id, valid_until, created_at')
-        .eq('user_id', profile!.id)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle()
-      targetSplit = recentSplit
-    }
-
-    const activeSplitId = targetSplit?.id
-
-    // Load today's workout for the target split
-    const dayOfWeek = TODAY === 0 ? 7 : TODAY
-    if (activeSplitId) {
-      const { data: workouts } = await supabase
-        .from('workouts')
-        .select('*, workout_exercises(*, exercises(*))')
-        .eq('user_id', profile!.id)
-        .eq('split_id', activeSplitId)
-        .eq('day_of_week', dayOfWeek)
-        .limit(1)
-
-      if (workouts && workouts.length > 0) setTodayWorkout(workouts[0])
-      else setTodayWorkout(null)
-
-      // Load all workouts for the week for the target split
-      const { data: allW } = await supabase
-        .from('workouts')
-        .select('*')
-        .eq('user_id', profile!.id)
-        .eq('split_id', activeSplitId)
-        .order('day_of_week')
-
-      if (allW) setAllWorkouts(allW)
-    } else {
-      setAllWorkouts([])
-      setTodayWorkout(null)
-    }
-
-    // Check if today's session was completed
-    const today = new Date().toISOString().split('T')[0]
-    const { data: session } = await supabase
-      .from('workout_sessions')
-      .select('id')
-      .eq('user_id', profile!.id)
-      .eq('status', 'completed')
-      .gte('started_at', today)
-      .limit(1)
-
-    const isTodayDone = !!(session && session.length > 0)
-    setCompletedToday(isTodayDone)
-
-    // Load split info and calculate week
-    if (targetSplit) {
-      const validUntil = new Date(targetSplit.valid_until)
-      const createdAt = new Date(targetSplit.created_at)
-      const now = new Date()
+    setIsLoading(true)
+    try {
+      const supabase = createClient()
       
-      const isExpired = now > validUntil
-      setIsBlockExpired(isExpired)
+      // 1. Get active split first
+      const { data: activeSplit, error: splitErr } = await supabase
+        .from('workout_splits')
+        .select('id, valid_until, generated_at')
+        .eq('user_id', profile!.id)
+        .eq('is_active', true)
+        .maybeSingle()
 
-      const diffMs = now.getTime() - createdAt.getTime()
-      const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
-      const weekNumber = Math.min(4, Math.floor(diffDays / 7) + 1)
-      const isDeload = weekNumber === 4
-
-      setSplitInfo({ valid_until: targetSplit.valid_until, week_number: weekNumber, is_deload: isDeload })
-    }
-
-    // Smart Streak Engine Integration
-    const { data: lastSession } = await supabase
-      .from('workout_sessions')
-      .select('completed_at')
-      .eq('user_id', profile!.id)
-      .eq('status', 'completed')
-      .order('completed_at', { ascending: false })
-      .limit(1)
-
-    const streakResult = evaluateStreak(
-      profile!.current_streak || 0,
-      profile!.longest_streak || 0,
-      lastSession?.[0]?.completed_at || null,
-      profile!.workout_frequency,
-      isTodayDone
-    )
-
-    setLocalStreak(streakResult.current_streak)
-
-    if (streakResult.current_streak !== profile!.current_streak) {
-      await supabase.from('profiles').update({
-        current_streak: streakResult.current_streak,
-        longest_streak: streakResult.longest_streak
-      }).eq('id', profile!.id)
-    }
-
-    // Load weekly volume data
-    const weekAgo = new Date()
-    weekAgo.setDate(weekAgo.getDate() - 7)
-    const { data: weekLogs } = await supabase
-      .from('session_exercise_logs')
-      .select('exercise_slug, reps_completed, weight_kg, set_number')
-      .eq('user_id', profile!.id)
-      .gte('completed_at', weekAgo.toISOString())
-
-    if (weekLogs && weekLogs.length > 0) {
-      const slugs = [...new Set(weekLogs.map(l => l.exercise_slug).filter(Boolean))]
-      const { data: dbExercises } = await supabase
-        .from('exercises')
-        .select('slug, muscle_group, secondary_muscles')
-        .in('slug', slugs)
-
-      if (dbExercises) {
-        const slugToMuscle: Record<string, { primary: MuscleGroup[], secondary: MuscleGroup[] }> = {}
-        for (const ex of dbExercises) {
-          slugToMuscle[ex.slug] = {
-            primary: [ex.muscle_group as MuscleGroup],
-            secondary: (ex.secondary_muscles || []) as MuscleGroup[],
-          }
-        }
-
-        const exerciseSets: Record<string, number> = {}
-        for (const log of weekLogs) {
-          if (log.exercise_slug) {
-            exerciseSets[log.exercise_slug] = (exerciseSets[log.exercise_slug] || 0) + 1
-          }
-        }
-
-        const volumeInput = Object.entries(exerciseSets).map(([slug, sets]) => ({
-          primaryMuscles: slugToMuscle[slug]?.primary || [],
-          secondaryMuscles: slugToMuscle[slug]?.secondary || [],
-          sets,
-        }))
-
-        const weeklySets = countWeeklySets(volumeInput)
-        const snapshot = getDashboardVolumeSnapshot(
-          weeklySets,
-          (profile?.physique_program as PhysiqueProgram) || null
-        )
-        setVolumeSnapshot(snapshot)
+      // Fallback: If no "active" split, get the most recent one
+      let targetSplit = activeSplit
+      if (!targetSplit) {
+        const { data: recentSplit } = await supabase
+          .from('workout_splits')
+          .select('id, valid_until, generated_at')
+          .eq('user_id', profile!.id)
+          .order('generated_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+        targetSplit = recentSplit
       }
-    }
 
-    setIsLoading(false)
+      const activeSplitId = targetSplit?.id || null
+      let finalSplitId = activeSplitId
+
+      // Secondary Fallback: If still no split ID, try to find one from the workouts table
+      if (!finalSplitId) {
+        const { data: orphanedWorkout } = await supabase
+          .from('workouts')
+          .select('split_id')
+          .eq('user_id', profile!.id)
+          .limit(1)
+          .maybeSingle()
+        
+        if (orphanedWorkout) {
+          finalSplitId = orphanedWorkout.split_id
+          
+          // Fetch the split info for this orphaned workout
+          const { data: orphanedSplit } = await supabase
+            .from('workout_splits')
+            .select('id, valid_until, generated_at')
+            .eq('id', finalSplitId)
+            .maybeSingle()
+          
+          if (orphanedSplit) {
+            targetSplit = orphanedSplit
+          }
+        }
+      }
+
+      // Load today's workout for the final split
+      const dayOfWeek = TODAY === 0 ? 7 : TODAY
+      if (finalSplitId) {
+        const { data: workouts } = await supabase
+          .from('workouts')
+          .select('*, workout_exercises(*, exercises(*))')
+          .eq('user_id', profile!.id)
+          .eq('split_id', finalSplitId)
+          .eq('day_of_week', dayOfWeek)
+          .limit(1)
+
+        if (workouts && workouts.length > 0) setTodayWorkout(workouts[0])
+        else setTodayWorkout(null)
+
+        // Load all workouts for the week for the target split
+        const { data: allW } = await supabase
+          .from('workouts')
+          .select('*')
+          .eq('user_id', profile!.id)
+          .eq('split_id', finalSplitId)
+          .order('day_of_week')
+
+        if (allW) setAllWorkouts(allW)
+      } else {
+        setAllWorkouts([])
+        setTodayWorkout(null)
+      }
+
+      // Check if today's session was completed
+      const today = new Date().toISOString().split('T')[0]
+      const { data: session } = await supabase
+        .from('workout_sessions')
+        .select('id')
+        .eq('user_id', profile!.id)
+        .eq('status', 'completed')
+        .gte('started_at', today)
+        .limit(1)
+
+      const isTodayDone = !!(session && session.length > 0)
+      setCompletedToday(isTodayDone)
+
+      // Load split info and calculate week
+      if (targetSplit) {
+        const validUntil = new Date(targetSplit.valid_until)
+        const generatedAt = new Date(targetSplit.generated_at)
+        const now = new Date()
+        
+        const isExpired = now > validUntil
+        setIsBlockExpired(isExpired)
+
+        const diffMs = now.getTime() - generatedAt.getTime()
+        const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
+        const weekNumber = Math.min(4, Math.floor(diffDays / 7) + 1)
+        const isDeload = weekNumber === 4
+
+        setSplitInfo({ valid_until: targetSplit.valid_until, week_number: weekNumber, is_deload: isDeload })
+      }
+
+      // Smart Streak Engine Integration
+      const { data: lastSession } = await supabase
+        .from('workout_sessions')
+        .select('completed_at')
+        .eq('user_id', profile!.id)
+        .eq('status', 'completed')
+        .order('completed_at', { ascending: false })
+        .limit(1)
+
+      const streakResult = evaluateStreak(
+        profile!.current_streak || 0,
+        profile!.longest_streak || 0,
+        lastSession?.[0]?.completed_at || null,
+        profile!.workout_frequency,
+        isTodayDone
+      )
+
+      setLocalStreak(streakResult.current_streak)
+
+      if (streakResult.current_streak !== profile!.current_streak) {
+        await supabase.from('profiles').update({
+          current_streak: streakResult.current_streak,
+          longest_streak: streakResult.longest_streak
+        }).eq('id', profile!.id)
+      }
+
+      // Load weekly volume data
+      const weekAgo = new Date()
+      weekAgo.setDate(weekAgo.getDate() - 7)
+      const { data: weekLogs } = await supabase
+        .from('session_exercise_logs')
+        .select('exercise_slug, reps_completed, weight_kg, set_number')
+        .eq('user_id', profile!.id)
+        .gte('completed_at', weekAgo.toISOString())
+
+      if (weekLogs && weekLogs.length > 0) {
+        const slugs = [...new Set(weekLogs.map(l => l.exercise_slug).filter(Boolean))]
+        const { data: dbExercises } = await supabase
+          .from('exercises')
+          .select('slug, muscle_group, secondary_muscles')
+          .in('slug', slugs)
+
+        if (dbExercises) {
+          const slugToMuscle: Record<string, { primary: MuscleGroup[], secondary: MuscleGroup[] }> = {}
+          for (const ex of dbExercises) {
+            slugToMuscle[ex.slug] = {
+              primary: [ex.muscle_group as MuscleGroup],
+              secondary: (ex.secondary_muscles || []) as MuscleGroup[],
+            }
+          }
+
+          const exerciseSets: Record<string, number> = {}
+          for (const log of weekLogs) {
+            if (log.exercise_slug) {
+              exerciseSets[log.exercise_slug] = (exerciseSets[log.exercise_slug] || 0) + 1
+            }
+          }
+
+          const volumeInput = Object.entries(exerciseSets).map(([slug, sets]) => ({
+            primaryMuscles: slugToMuscle[slug]?.primary || [],
+            secondaryMuscles: slugToMuscle[slug]?.secondary || [],
+            sets,
+          }))
+
+          const weeklySets = countWeeklySets(volumeInput)
+          const snapshot = getDashboardVolumeSnapshot(
+            weeklySets,
+            (profile?.physique_program as PhysiqueProgram) || null
+          )
+          setVolumeSnapshot(snapshot)
+        }
+      }
+    } catch (error) {
+      console.error('Dashboard load error:', error)
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   const handleRotateBlock = async () => {
