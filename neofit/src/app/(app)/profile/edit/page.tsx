@@ -21,9 +21,10 @@ const PRESETS: { id: GymPreset; label: string; description: string; emoji: strin
 ]
 
 const EQUIPMENT_CATEGORIES = [
-  { category: 'Free Weights', items: EQUIPMENT_ITEMS.filter(e => ['dumbbells', 'barbell', 'bench', 'incline_bench', 'kettlebell'].includes(e.id)) },
-  { category: 'Machines', items: EQUIPMENT_ITEMS.filter(e => ['cable_machine', 'smith_machine', 'leg_press_machine', 'leg_extension_machine', 'leg_curl_machine', 'lat_pulldown_machine', 'chest_press_machine', 'calf_raise_machine'].includes(e.id)) },
-  { category: 'Functional', items: EQUIPMENT_ITEMS.filter(e => ['pullup_bar', 'resistance_bands', 'dip_bars', 'plyo_box', 'ab_wheel', 'trx'].includes(e.id)) },
+  { category: 'Free Weights', items: EQUIPMENT_ITEMS.filter(e => ['dumbbells', 'barbell', 'bench', 'incline_bench', 'decline_bench', 'kettlebell', 'medicine_ball', 'landmine'].includes(e.id)) },
+  { category: 'Machines', items: EQUIPMENT_ITEMS.filter(e => ['cable_machine', 'smith_machine', 'leg_press_machine', 'leg_extension_machine', 'leg_curl_machine', 'lat_pulldown_machine', 'chest_press_machine', 'shoulder_press_machine', 'seated_row_machine', 't_bar_row_machine', 'hack_squat_machine', 'pec_deck_machine', 'lateral_raise_machine', 'calf_raise_machine'].includes(e.id)) },
+  { category: 'Functional', items: EQUIPMENT_ITEMS.filter(e => ['pullup_bar', 'resistance_bands', 'dip_bars', 'plyo_box', 'ab_wheel', 'roman_chair', 'preacher_bench', 'battle_ropes', 'step_platform', 'yoga_mat', 'trx'].includes(e.id)) },
+  { category: 'Cardio', items: EQUIPMENT_ITEMS.filter(e => ['treadmill', 'stationary_bike', 'rower'].includes(e.id)) },
 ]
 
 export default function EditProfilePage() {

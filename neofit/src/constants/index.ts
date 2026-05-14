@@ -5,10 +5,10 @@ import { GymPreset, EquipmentItem, PhysiqueProgram, SplitType, Goal, ExperienceL
 // ═══════════════════════════════════════════════════════════════════════
 
 export const GYM_PRESETS: Record<GymPreset, EquipmentItem[]> = {
-  college_gym: ['dumbbells', 'barbell', 'bench', 'pullup_bar', 'lat_pulldown_machine', 'leg_press_machine', 'leg_extension_machine', 'cable_machine'],
+  college_gym: ['dumbbells', 'barbell', 'bench', 'incline_bench', 'pullup_bar', 'lat_pulldown_machine', 'leg_press_machine', 'leg_extension_machine', 'cable_machine', 'stationary_bike', 'treadmill'],
   dumbbell_only: ['dumbbells', 'bench', 'incline_bench'],
-  minimal: ['dumbbells', 'bench', 'pullup_bar', 'resistance_bands'],
-  full_gym: ['dumbbells', 'barbell', 'bench', 'incline_bench', 'pullup_bar', 'cable_machine', 'smith_machine', 'leg_press_machine', 'leg_extension_machine', 'leg_curl_machine', 'lat_pulldown_machine', 'chest_press_machine', 'calf_raise_machine', 'dip_bars', 'plyo_box', 'kettlebell', 'resistance_bands'],
+  minimal: ['dumbbells', 'bench', 'pullup_bar', 'resistance_bands', 'yoga_mat'],
+  full_gym: ['dumbbells', 'barbell', 'bench', 'incline_bench', 'decline_bench', 'pullup_bar', 'cable_machine', 'smith_machine', 'leg_press_machine', 'leg_extension_machine', 'leg_curl_machine', 'lat_pulldown_machine', 'chest_press_machine', 'shoulder_press_machine', 'seated_row_machine', 't_bar_row_machine', 'hack_squat_machine', 'pec_deck_machine', 'lateral_raise_machine', 'calf_raise_machine', 'preacher_bench', 'roman_chair', 'dip_bars', 'plyo_box', 'kettlebell', 'resistance_bands', 'treadmill', 'stationary_bike', 'rower', 'medicine_ball', 'battle_ropes', 'landmine', 'step_platform', 'yoga_mat', 'trx'],
   custom: [],
 }
 
@@ -21,6 +21,7 @@ export const EQUIPMENT_ITEMS: { id: EquipmentItem; label: string; icon: string }
   { id: 'barbell', label: 'Barbell', icon: '🔩' },
   { id: 'bench', label: 'Flat Bench', icon: '🪑' },
   { id: 'incline_bench', label: 'Incline Bench', icon: '📐' },
+  { id: 'decline_bench', label: 'Decline Bench', icon: '📉' },
   { id: 'pullup_bar', label: 'Pull-Up Bar', icon: '🔝' },
   { id: 'cable_machine', label: 'Cable Machine', icon: '🔗' },
   { id: 'smith_machine', label: 'Smith Machine', icon: '⚙️' },
@@ -32,9 +33,25 @@ export const EQUIPMENT_ITEMS: { id: EquipmentItem; label: string; icon: string }
   { id: 'leg_curl_machine', label: 'Leg Curl', icon: '🦿' },
   { id: 'lat_pulldown_machine', label: 'Lat Pulldown', icon: '📥' },
   { id: 'chest_press_machine', label: 'Chest Press', icon: '🫁' },
+  { id: 'shoulder_press_machine', label: 'Shoulder Press', icon: '🔼' },
+  { id: 'seated_row_machine', label: 'Seated Row', icon: '🚣' },
+  { id: 't_bar_row_machine', label: 'T-Bar Row', icon: '⚓' },
+  { id: 'hack_squat_machine', label: 'Hack Squat', icon: '🏗️' },
+  { id: 'pec_deck_machine', label: 'Pec Deck', icon: '🦋' },
+  { id: 'lateral_raise_machine', label: 'Lateral Raise', icon: '👐' },
   { id: 'calf_raise_machine', label: 'Calf Raise', icon: '🦶' },
+  { id: 'preacher_bench', label: 'Preacher Bench', icon: '⛪' },
+  { id: 'roman_chair', label: 'Roman Chair', icon: '🏛️' },
   { id: 'plyo_box', label: 'Plyo Box', icon: '📦' },
   { id: 'ab_wheel', label: 'Ab Wheel', icon: '🎡' },
+  { id: 'treadmill', label: 'Treadmill', icon: '🏃' },
+  { id: 'stationary_bike', label: 'Stationary Bike', icon: '🚲' },
+  { id: 'rower', label: 'Rower', icon: '🛶' },
+  { id: 'medicine_ball', label: 'Medicine Ball', icon: '🏀' },
+  { id: 'battle_ropes', label: 'Battle Ropes', icon: '〰️' },
+  { id: 'landmine', label: 'Landmine', icon: '🧨' },
+  { id: 'step_platform', label: 'Step Platform', icon: '🪜' },
+  { id: 'yoga_mat', label: 'Yoga Mat', icon: '🧘' },
   { id: 'trx', label: 'TRX', icon: '🔱' },
 ]
 
