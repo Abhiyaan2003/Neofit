@@ -1,12 +1,11 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { ArrowLeft, ArrowRight, Check } from 'lucide-react'
 import { useOnboardingStore } from '@/store/onboarding'
-import { GymPreset } from '@/types'
-import { GYM_PRESETS } from '@/constants'
-import { createClient } from '@/lib/supabase/client'
+import { GymPreset, EquipmentItem } from '@/types'
+import { GYM_PRESETS, EQUIPMENT_ITEMS } from '@/constants'
 
 const PRESETS: { id: GymPreset; label: string; description: string; emoji: string }[] = [
   { id: 'college_gym', label: 'College Gym', description: 'Standard equipment — barbells, dumbbells, machines', emoji: '🏫' },
@@ -16,29 +15,16 @@ const PRESETS: { id: GymPreset; label: string; description: string; emoji: strin
   { id: 'custom', label: 'Custom', description: 'Choose exactly what your gym has', emoji: '🔧' },
 ]
 
-const ALL_EQUIPMENT_BY_CATEGORY = [
-  {
-    category: 'Free Weights',
-    items: ['Dumbbells', 'Barbell', 'Flat Bench', 'Weight Plates', 'EZ Curl Bar', 'Incline Bench'],
-  },
-  {
-    category: 'Machines',
-    items: ['Chest Press Machine', 'Leg Extension Machine', 'Lat Pulldown Machine', 'Cable Machine', 'Leg Press Machine', 'Smith Machine', 'Seated Row Machine', 'Leg Curl Machine'],
-  },
-  {
-    category: 'Functional',
-    items: ['Pull-up Bar', 'Resistance Bands', 'Kettlebells', 'Dip Bars', 'TRX / Suspension Trainer'],
-  },
-  {
-    category: 'Cardio',
-    items: ['Treadmill', 'Stationary Bike', 'Rowing Machine', 'Elliptical'],
-  },
+const EQUIPMENT_CATEGORIES = [
+  { category: 'Free Weights', items: EQUIPMENT_ITEMS.filter(e => ['dumbbells', 'barbell', 'bench', 'incline_bench', 'kettlebell'].includes(e.id)) },
+  { category: 'Machines', items: EQUIPMENT_ITEMS.filter(e => ['cable_machine', 'smith_machine', 'leg_press_machine', 'leg_extension_machine', 'leg_curl_machine', 'lat_pulldown_machine', 'chest_press_machine', 'calf_raise_machine'].includes(e.id)) },
+  { category: 'Functional', items: EQUIPMENT_ITEMS.filter(e => ['pullup_bar', 'resistance_bands', 'dip_bars', 'plyo_box', 'ab_wheel', 'trx'].includes(e.id)) },
 ]
 
 export function BuildGymStep() {
   const { goNext, goPrev, updateData, data } = useOnboardingStore()
   const [selectedPreset, setSelectedPreset] = useState<GymPreset | null>(data.gym_preset)
-  const [selectedEquipment, setSelectedEquipment] = useState<string[]>(data.selected_equipment || [])
+  const [selectedEquipment, setSelectedEquipment] = useState<EquipmentItem[]>(data.selected_equipment || [])
 
   const handlePresetSelect = (preset: GymPreset) => {
     setSelectedPreset(preset)
@@ -47,7 +33,7 @@ export function BuildGymStep() {
     }
   }
 
-  const toggleEquipment = (item: string) => {
+  const toggleEquipment = (item: EquipmentItem) => {
     setSelectedEquipment(prev =>
       prev.includes(item) ? prev.filter(e => e !== item) : [...prev, item]
     )
@@ -69,7 +55,7 @@ export function BuildGymStep() {
       </button>
 
       <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
-        <p className="text-[#8BAE9E] text-sm font-medium mb-2 uppercase tracking-wider">Step 5 of 5</p>
+        <p className="text-[#8BAE9E] text-sm font-medium mb-2 uppercase tracking-wider">Equipment Setup</p>
         <h2 className="text-2xl font-bold mb-2">Build your gym</h2>
         <p className="text-[#A8B0BE] text-sm mb-6">Select a preset or pick your equipment individually.</p>
       </motion.div>
@@ -103,22 +89,22 @@ export function BuildGymStep() {
           <p className="text-sm font-medium text-[#A8B0BE] mb-4">
             {selectedPreset === 'custom' ? 'Select your equipment' : 'Or customize your selection:'}
           </p>
-          {ALL_EQUIPMENT_BY_CATEGORY.map((cat) => (
+          {EQUIPMENT_CATEGORIES.map((cat) => (
             <div key={cat.category} className="mb-5">
               <p className="text-xs text-[#8BAE9E] font-medium uppercase tracking-wider mb-2.5">{cat.category}</p>
               <div className="flex flex-wrap gap-2">
                 {cat.items.map((item) => (
                   <button
-                    key={item}
-                    onClick={() => toggleEquipment(item)}
+                    key={item.id}
+                    onClick={() => toggleEquipment(item.id)}
                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-all duration-150 ${
-                      selectedEquipment.includes(item)
+                      selectedEquipment.includes(item.id)
                         ? 'bg-[#8BAE9E]/15 border-[#8BAE9E]/40 text-[#8BAE9E]'
                         : 'bg-transparent border-white/10 text-[#A8B0BE] hover:border-white/20'
                     }`}
                   >
-                    {selectedEquipment.includes(item) && <Check className="w-3 h-3" />}
-                    {item}
+                    {selectedEquipment.includes(item.id) && <Check className="w-3 h-3" />}
+                    {item.icon} {item.label}
                   </button>
                 ))}
               </div>
@@ -134,7 +120,7 @@ export function BuildGymStep() {
           disabled={!selectedPreset || selectedEquipment.length === 0}
           className="group w-full flex items-center justify-center gap-2 bg-[#8BAE9E] text-[#0F1115] font-semibold py-4 rounded-2xl hover:bg-[#A3C4B4] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
         >
-          Generate my plan
+          Continue
           <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
         </button>
         {selectedEquipment.length > 0 && (

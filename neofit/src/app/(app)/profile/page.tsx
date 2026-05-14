@@ -1,12 +1,14 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { useRouter } from 'next/navigation'
 import { useAuthStore } from '@/store/auth'
 import { createClient } from '@/lib/supabase/client'
-import { LogOut, ChevronRight, Dumbbell, Target, Calendar, User } from 'lucide-react'
-import { GOAL_LABELS, EXPERIENCE_LABELS } from '@/constants'
+import { LogOut, ChevronRight, Dumbbell, Target, Calendar, User, Sparkles, Layers, Wrench } from 'lucide-react'
+import { GOAL_LABELS, EXPERIENCE_LABELS, SPLIT_LABELS } from '@/constants'
+import { PHYSIQUE_PROGRAMS } from '@/constants/physique-programs'
+import { PhysiqueProgram, SplitType } from '@/types'
 import { toast } from 'sonner'
 
 export default function ProfilePage() {
@@ -23,21 +25,55 @@ export default function ProfilePage() {
     router.push('/')
   }
 
+  // Physique program display
+  const physiqueProgram = profile?.physique_program
+    ? PHYSIQUE_PROGRAMS[profile.physique_program as PhysiqueProgram]
+    : null
+
+  // Split display
+  const splitType = profile?.split_type
+    ? SPLIT_LABELS[profile.split_type as SplitType]
+    : null
+
+  // Equipment count
+  const equipmentCount = (profile as any)?.selected_equipment?.length ?? 0
+
   const PROFILE_ITEMS = [
     {
       label: 'Goal',
       value: profile?.goal ? GOAL_LABELS[profile.goal]?.label : 'Not set',
       icon: Target,
+      color: '#F9A826',
+    },
+    {
+      label: 'Physique Program',
+      value: physiqueProgram ? `${physiqueProgram.icon} ${physiqueProgram.name}` : 'Not set',
+      icon: Sparkles,
+      color: '#A274C6',
+    },
+    {
+      label: 'Training Split',
+      value: splitType ? `${splitType.icon} ${splitType.label}` : 'Not set',
+      icon: Layers,
+      color: '#8BAE9E',
     },
     {
       label: 'Experience',
       value: profile?.experience_level ? EXPERIENCE_LABELS[profile.experience_level]?.label : 'Not set',
       icon: Dumbbell,
+      color: '#8BAE9E',
     },
     {
       label: 'Training Days',
       value: profile?.workout_frequency ? `${profile.workout_frequency} days/week` : 'Not set',
       icon: Calendar,
+      color: '#74C69D',
+    },
+    {
+      label: 'Equipment',
+      value: equipmentCount > 0 ? `${equipmentCount} items` : 'Not set',
+      icon: Wrench,
+      color: '#6BA3C6',
     },
     {
       label: 'Body',
@@ -45,6 +81,7 @@ export default function ProfilePage() {
         ? `${profile.height_cm}cm · ${profile.weight_kg}kg`
         : 'Not set',
       icon: User,
+      color: '#A8B0BE',
     },
   ]
 
@@ -71,11 +108,18 @@ export default function ProfilePage() {
           )}
         </div>
         <h2 className="text-xl font-bold">{profile?.name ?? 'Athlete'}</h2>
-        <p className="text-sm text-[#A8B0BE] mt-0.5">Neofit Member</p>
+        {physiqueProgram && (
+          <p className="text-sm text-[#8BAE9E] mt-0.5">{physiqueProgram.icon} {physiqueProgram.name}</p>
+        )}
         <div className="flex items-center gap-3 mt-2">
           <span className="text-xs text-[#A8B0BE] px-3 py-1 rounded-full bg-white/5">
             🔥 {profile?.current_streak ?? 0} day streak
           </span>
+          {profile?.longest_streak ? (
+            <span className="text-xs text-[#A8B0BE] px-3 py-1 rounded-full bg-white/5">
+              🏆 Best: {profile.longest_streak}d
+            </span>
+          ) : null}
         </div>
       </motion.div>
 
@@ -91,7 +135,9 @@ export default function ProfilePage() {
             className="flex items-center justify-between p-4 rounded-xl bg-[#1D212B] border border-white/5"
           >
             <div className="flex items-center gap-3">
-              <item.icon className="w-4 h-4 text-[#8BAE9E]" />
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: `${item.color}15` }}>
+                <item.icon className="w-4 h-4" style={{ color: item.color }} />
+              </div>
               <span className="text-sm text-[#A8B0BE]">{item.label}</span>
             </div>
             <span className="text-sm font-medium">{item.value}</span>
@@ -103,10 +149,10 @@ export default function ProfilePage() {
       <div className="flex flex-col gap-2 mb-6">
         <p className="text-xs text-[#A8B0BE] uppercase tracking-wider mb-1 font-medium">Settings</p>
         <button
-          onClick={() => router.push('/onboarding')}
+          onClick={() => router.push('/profile/edit')}
           className="flex items-center justify-between p-4 rounded-xl bg-[#1D212B] border border-white/5 hover:border-white/10 transition-all w-full text-left"
         >
-          <span className="text-sm font-medium">Rebuild My Plan</span>
+          <span className="text-sm font-medium">Edit Profile & Plan</span>
           <ChevronRight className="w-4 h-4 text-[#A8B0BE]/40" />
         </button>
       </div>

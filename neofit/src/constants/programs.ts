@@ -39,7 +39,7 @@ export const V_TAPER_PROGRAM: Program = {
   tagline: 'Build a wide back, capped shoulders & a narrow waist',
   description:
     'A 6-day Push/Pull/Legs split engineered for the classic V-taper aesthetic. Prioritises lat width, shoulder width (especially side and rear delts), upper chest thickness, and a tight core. Suitable for intermediate lifters training 5–6 days per week.',
-  split_type: 'push_pull_legs',
+  split_type: 'ppl',
   difficulty: 'intermediate',
   daysPerWeek: 6,
   weeklySchedule: ['Push', 'Pull', 'Legs', 'Rest', 'Push', 'Pull', 'Legs'],

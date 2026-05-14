@@ -5,13 +5,14 @@ import { motion } from 'framer-motion'
 import { useRouter } from 'next/navigation'
 import { useOnboardingStore } from '@/store/onboarding'
 import { createClient } from '@/lib/supabase/client'
-import { generateWorkoutPlan, getEquipmentFromPreset } from '@/lib/workout-engine'
+import { regenerateWorkoutPlanService } from '@/lib/workout-engine/generator-service'
 import { toast } from 'sonner'
 
 const MESSAGES = [
   'Analyzing your goals…',
   'Filtering exercises for your gym…',
   'Building your training split…',
+  'Scoring exercises for your physique goals…',
   'Ordering compound movements…',
   'Setting up your weekly plan…',
   'Almost ready…',
@@ -34,104 +35,18 @@ export function GeneratingStep() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { router.push('/login'); return }
 
-      // 1. Update profile
-      await supabase.from('profiles').update({
+      await regenerateWorkoutPlanService(user.id, {
         goal: data.goal,
+        physique_program: data.physique_program,
         experience_level: data.experience_level,
+        workout_frequency: data.workout_frequency,
+        split_type: data.split_type,
         age: data.age,
         height_cm: data.height_cm,
         weight_kg: data.weight_kg,
-        workout_frequency: data.workout_frequency,
-        onboarding_complete: true,
-      }).eq('id', user.id)
-
-      // 2. Deactivate any existing splits
-      await supabase.from('workout_splits').update({ is_active: false }).eq('user_id', user.id)
-
-      // 3. Create or update gym profile
-      const { data: gymProfile } = await supabase
-        .from('gym_profiles')
-        .upsert({ user_id: user.id, name: 'My Gym', preset: data.gym_preset }, { onConflict: 'user_id' })
-        .select()
-        .single()
-
-      if (gymProfile) {
-        // Link equipment: delete old links first, then re-insert
-        await supabase.from('gym_equipment').delete().eq('gym_profile_id', gymProfile.id)
-        const { data: dbEquipment } = await supabase.from('equipment').select('id, name')
-        const matching = (dbEquipment || []).filter(e => data.selected_equipment.includes(e.name))
-        if (matching.length > 0) {
-          await supabase.from('gym_equipment').insert(
-            matching.map(e => ({ gym_profile_id: gymProfile.id, equipment_id: e.id }))
-          )
-        }
-      }
-
-      // 4. Run the workout engine (uses local exercise data)
-      const equipmentNames = getEquipmentFromPreset(data.gym_preset!, data.selected_equipment)
-      const { splitType, days } = generateWorkoutPlan(
-        data.goal!,
-        data.experience_level!,
-        data.workout_frequency!,
-        equipmentNames,
-        data.gym_preset ?? undefined,
-      )
-
-      // 5. Fetch all exercise UUIDs from DB indexed by slug
-      const { data: dbExercises } = await supabase.from('exercises').select('id, slug')
-      const slugToId: Record<string, string> = {}
-      ;(dbExercises || []).forEach(ex => { slugToId[ex.slug] = ex.id })
-
-      // 6. Save split
-      const { data: split } = await supabase.from('workout_splits').insert({
-        user_id: user.id,
-        split_type: splitType,
-        is_active: true,
-      }).select().single()
-
-      if (split) {
-        for (let i = 0; i < days.length; i++) {
-          const day = days[i]
-          const { data: workout } = await supabase.from('workouts').insert({
-            split_id: split.id,
-            user_id: user.id,
-            day_of_week: i + 1,
-            day_label: day.dayLabel,
-            focus: day.focus,
-            estimated_duration_minutes: day.estimatedDuration,
-          }).select().single()
-
-          if (workout) {
-            // Only insert exercises that have a matching DB UUID
-            type ExerciseRow = {
-              workout_id: string
-              exercise_id: string
-              order_index: number
-              sets: number
-              reps: string
-              rest_time_seconds: number
-            }
-            const exerciseRows: ExerciseRow[] = day.exercises
-              .map((ex, idx) => {
-                const dbId = slugToId[ex.exercise.slug]
-                if (!dbId) return null
-                return {
-                  workout_id: workout.id,
-                  exercise_id: dbId,
-                  order_index: idx,
-                  sets: ex.sets,
-                  reps: ex.reps,
-                  rest_time_seconds: ex.restTime,
-                } satisfies ExerciseRow
-              })
-              .filter((r): r is ExerciseRow => r !== null)
-
-            if (exerciseRows.length > 0) {
-              await supabase.from('workout_exercises').insert(exerciseRows)
-            }
-          }
-        }
-      }
+        selected_equipment: data.selected_equipment,
+        gym_preset: data.gym_preset,
+      })
 
       reset()
       router.push('/dashboard')

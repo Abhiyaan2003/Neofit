@@ -5,19 +5,23 @@ import { OnboardingData } from '@/types'
 type OnboardingStep = 
   | 'welcome' 
   | 'goal' 
+  | 'physique_program'
   | 'experience' 
   | 'measurements' 
+  | 'equipment'
+  | 'split'
   | 'frequency' 
-  | 'build_gym' 
   | 'generating'
 
 const STEPS: OnboardingStep[] = [
   'welcome',
   'goal',
+  'physique_program',
   'experience',
   'measurements',
+  'equipment',
+  'split',
   'frequency',
-  'build_gym',
   'generating',
 ]
 
@@ -37,11 +41,13 @@ interface OnboardingStore {
 
 const initialData: OnboardingData = {
   goal: null,
+  physique_program: null,
   experience_level: null,
   age: null,
   height_cm: null,
   weight_kg: null,
   workout_frequency: null,
+  split_type: null,
   gym_preset: null,
   selected_equipment: [],
 }
@@ -80,7 +86,6 @@ export const useOnboardingStore = create<OnboardingStore>()(
       },
 
       setSubmitting: (val) => set({ isSubmitting: val }),
-
       reset: () => set({ currentStep: 'welcome', stepIndex: 0, data: initialData, isSubmitting: false }),
     }),
     { name: 'neofit-onboarding' }

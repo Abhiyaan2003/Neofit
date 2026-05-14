@@ -1,40 +1,44 @@
 'use client'
+// [Touched to refresh IDE]
 
-import { useEffect } from 'react'
-import { useRouter } from 'next/navigation'
-import { useOnboardingStore } from '@/store/onboarding'
-import { WelcomeStep } from '@/features/onboarding/WelcomeStep'
-import { GoalStep } from '@/features/onboarding/GoalStep'
-import { ExperienceStep } from '@/features/onboarding/ExperienceStep'
-import { MeasurementsStep } from '@/features/onboarding/MeasurementsStep'
-import { FrequencyStep } from '@/features/onboarding/FrequencyStep'
-import { BuildGymStep } from '@/features/onboarding/BuildGymStep'
-import { GeneratingStep } from '@/features/onboarding/GeneratingStep'
+import { useOnboardingStore, TOTAL_STEPS } from '@/store/onboarding'
+import { 
+  WelcomeStep, 
+  GoalStep, 
+  PhysiqueProgramStep, 
+  ExperienceStep, 
+  MeasurementsStep, 
+  BuildGymStep, 
+  SplitStep, 
+  FrequencyStep, 
+  GeneratingStep 
+} from '@/features/onboarding'
 import { AnimatePresence, motion } from 'framer-motion'
 
-const STEP_COMPONENTS = {
+const STEP_COMPONENTS: Record<string, React.ComponentType> = {
   welcome: WelcomeStep,
   goal: GoalStep,
+  physique_program: PhysiqueProgramStep,
   experience: ExperienceStep,
   measurements: MeasurementsStep,
+  equipment: BuildGymStep,
+  split: SplitStep,
   frequency: FrequencyStep,
-  build_gym: BuildGymStep,
   generating: GeneratingStep,
 }
 
 export default function OnboardingPage() {
   const { currentStep, stepIndex } = useOnboardingStore()
-  const StepComponent = STEP_COMPONENTS[currentStep]
+  const StepComponent = STEP_COMPONENTS[currentStep] || WelcomeStep
 
   return (
     <div className="min-h-screen bg-[#0F1115] flex flex-col">
-      {/* Progress bar (skip on welcome/generating) */}
       {currentStep !== 'welcome' && currentStep !== 'generating' && (
         <div className="fixed top-0 left-0 right-0 z-50 h-0.5 bg-white/5">
           <motion.div
             className="h-full bg-[#8BAE9E]"
             initial={false}
-            animate={{ width: `${((stepIndex - 1) / 5) * 100}%` }}
+            animate={{ width: `${((stepIndex) / (TOTAL_STEPS - 1)) * 100}%` }}
             transition={{ duration: 0.4, ease: 'easeOut' }}
           />
         </div>
