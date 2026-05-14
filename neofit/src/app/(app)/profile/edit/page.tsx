@@ -278,6 +278,7 @@ export default function EditProfilePage() {
           </div>
         </section>
 
+        </div>
       </div>
 
       {/* Floating Save Button */}
